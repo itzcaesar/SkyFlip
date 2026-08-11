@@ -102,7 +102,7 @@ input:focus-visible {
   flex-basis: 242px;
   height: 100vh;
   max-height: 100vh;
-  overflow-y: auto;
+  overflow: hidden;
   border-right: 6px solid #111;
   background-color: #426724;
   background-image:
@@ -114,7 +114,8 @@ input:focus-visible {
 }
 
 .sidebar::-webkit-scrollbar {
-  width: 7px;
+  display: none;
+  width: 0;
 }
 
 .sidebar::-webkit-scrollbar-track {
@@ -257,7 +258,8 @@ th,
 }
 
 .sidebar-footnote {
-  border-top: 2px solid rgba(255, 255, 255, .2);
+  border-top: 0;
+  padding-top: 10px;
   color: #e3e3e3;
   text-shadow: 2px 2px 0 #303030;
 }
