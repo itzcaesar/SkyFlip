@@ -22,8 +22,12 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     app_secret: str = Field(default="change-me-in-development", min_length=1)
 
-    database_url: str = "postgresql+asyncpg://skyflip:skyflip@localhost:5432/skyflip"
-    redis_url: str = "redis://localhost:6379/0"
+    # Development defaults are intentionally self-contained. Docker/PostgreSQL/Redis can
+    # still override these values for deployment or integration testing.
+    database_url: str = "sqlite+aiosqlite:///./data/skyflip.db"
+    redis_url: str | None = None
+    auto_create_schema: bool = True
+    local_collector_enabled: bool = False
 
     hypixel_api_key: str | None = None
     hypixel_base_url: str = Field(default="https://api.hypixel.net")

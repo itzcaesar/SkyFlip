@@ -21,6 +21,10 @@ worker.collect_bazaar
 
 The API is read-oriented for market data. The worker owns upstream collection and is the only component that writes new market observations. This avoids request-driven polling storms and makes stale data explicit.
 
+## Local-first mode
+
+Development defaults use a file-backed SQLite database. The API creates the schema on startup and can run the Bazaar collector in-process when `LOCAL_COLLECTOR_ENABLED=true`. Redis is optional; without it, live SSE publication is disabled and the web app continues polling the API. The separate worker remains available for later multi-process/PostgreSQL deployments.
+
 ## Service boundaries
 
 - `apps/api/app/services/hypixel_client.py`: upstream HTTP concerns only.
@@ -38,4 +42,3 @@ An upstream failure marks existing Bazaar opportunity rows stale and leaves thei
 ## Extension points
 
 Auction House ingestion should use the same worker boundary but separate jobs for raw auction capture, NBT decoding, normalization, comparable grouping, valuation, anomaly analysis, and opportunity publication. The current `packages/item-parser` and `packages/market-engine` directories are reserved for extracting those shared primitives without coupling them to web routes.
-

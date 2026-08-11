@@ -4,7 +4,7 @@ import time
 from contextlib import suppress
 
 from app.config import get_settings
-from app.database import SessionLocal
+from app.database import SessionLocal, ensure_local_schema
 from app.redis_client import get_redis
 from app.services.collector import collect_bazaar
 
@@ -18,23 +18,25 @@ logger = logging.getLogger("skyflip.worker")
 async def run_cycle() -> None:
     settings = get_settings()
     redis = get_redis()
-    lock = redis.lock(
-        "skyflip:lock:bazaar-collector",
-        timeout=max(settings.bazaar_poll_seconds * 2, 60),
-    )
-    acquired = False
+    lock = None
+    acquired = redis is None
     started = time.perf_counter()
     try:
-        with suppress(Exception):
-            await redis.set(
-                "skyflip:worker:heartbeat",
-                "alive",
-                ex=max(settings.bazaar_poll_seconds * 3, 90),
+        if redis is not None:
+            lock = redis.lock(
+                "skyflip:lock:bazaar-collector",
+                timeout=max(settings.bazaar_poll_seconds * 2, 60),
             )
-        acquired = await lock.acquire(blocking=False)
-        if not acquired:
-            logger.info("bazaar_cycle_skipped_lock_held")
-            return
+            with suppress(Exception):
+                await redis.set(
+                    "skyflip:worker:heartbeat",
+                    "alive",
+                    ex=max(settings.bazaar_poll_seconds * 3, 90),
+                )
+            acquired = await lock.acquire(blocking=False)
+            if not acquired:
+                logger.info("bazaar_cycle_skipped_lock_held")
+                return
         async with SessionLocal() as session:
             result = await collect_bazaar(session, settings, redis=redis)
         logger.info(
@@ -44,24 +46,27 @@ async def run_cycle() -> None:
             result["opportunities"],
             result["stale"],
         )
-        with suppress(Exception):
-            await redis.set(
-                "skyflip:worker:last-success", str(int(time.time())), ex=86_400
-            )
+        if redis is not None:
+            with suppress(Exception):
+                await redis.set(
+                    "skyflip:worker:last-success", str(int(time.time())), ex=86_400
+                )
     except Exception:
         logger.exception("bazaar_cycle_failed")
-        with suppress(Exception):
-            await redis.set(
-                "skyflip:worker:last-failure", str(int(time.time())), ex=86_400
-            )
+        if redis is not None:
+            with suppress(Exception):
+                await redis.set(
+                    "skyflip:worker:last-failure", str(int(time.time())), ex=86_400
+                )
     finally:
-        if acquired:
+        if acquired and lock is not None:
             with suppress(Exception):
                 await lock.release()
 
 
 async def main() -> None:
     settings = get_settings()
+    await ensure_local_schema()
     logger.info("skyflip_worker_started poll_seconds=%d", settings.bazaar_poll_seconds)
     while True:
         await run_cycle()

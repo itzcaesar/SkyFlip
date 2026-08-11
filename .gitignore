@@ -31,6 +31,8 @@ wheels/
 htmlcov/
 coverage.xml
 coverage/
+data/
+*.db
 .tox/
 .nox/
 .mr_cache/

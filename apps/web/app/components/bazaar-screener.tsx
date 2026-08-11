@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { LiveEvents } from '@/app/components/live-events';
 import { FreshnessBadge, RiskBadge, ScorePill } from '@/app/components/status-badge';
-import { getBazaarPage } from '@/lib/api';
+import { getBazaarPage, refreshBazaar } from '@/lib/api';
 import { formatCoins, formatDuration, formatPercent } from '@/lib/format';
 
 type Filters = { search: string; minProfit: string; minRoi: string; maxCapital: string; minVolume: string; minLiquidity: string; maxFillTime: string; minScore: string; minConfidence: string; flipType: 'buy_order_to_sell_order' | 'instant_buy_to_instant_sell'; sortBy: string; sortDir: 'asc' | 'desc' };
@@ -30,19 +30,30 @@ function toParams(filters: Filters) {
 export function BazaarScreener({ initialParams = {} }: { initialParams?: Record<string, string | string[] | undefined> }) {
   const [filters, setFilters] = useState<Filters>(() => fromInitialParams(initialParams));
   const [showFilters, setShowFilters] = useState(true);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const params = useMemo(() => toParams(filters), [filters]);
   const query = useQuery({ queryKey: ['bazaar', 'screener', params.toString()], queryFn: () => getBazaarPage(params), refetchInterval: 30_000 });
   useEffect(() => { window.history.replaceState(null, '', `/bazaar?${params.toString()}`); }, [params]);
   const update = (key: keyof Filters, value: string) => setFilters((current) => ({ ...current, [key]: value }));
+  const refreshNow = async () => {
+    setRefreshError(null);
+    try {
+      await refreshBazaar();
+      await query.refetch();
+    } catch (error) {
+      setRefreshError(error instanceof Error ? error.message : 'Latest Bazaar snapshot could not be fetched.');
+    }
+  };
   const sort = (column: string) => setFilters((current) => ({ ...current, sortBy: column, sortDir: current.sortBy === column && current.sortDir === 'desc' ? 'asc' : 'desc' }));
   const items = query.data?.items ?? [];
 
   return (
     <>
       <LiveEvents />
-      <div className="page-heading"><div><div className="eyebrow">BAZAAR / SCREENER</div><h1>Find the spread</h1><p>Ranked by expected value, liquidity, confidence, and risk—not raw spread alone.</p></div><div className="heading-actions"><FreshnessBadge status={query.data?.freshness.status ?? (query.isLoading ? 'SYNCING' : 'UNAVAILABLE')} message={query.data?.freshness.message} /><button className="secondary-button" onClick={() => void query.refetch()}><RefreshCw size={14} /> Refresh</button></div></div>
+      <div className="page-heading"><div><div className="eyebrow">BAZAAR / SCREENER</div><h1>Find the spread</h1><p>Ranked by expected value, liquidity, confidence, and risk—not raw spread alone.</p></div><div className="heading-actions"><FreshnessBadge status={query.data?.freshness.status ?? (query.isLoading ? 'SYNCING' : 'UNAVAILABLE')} message={query.data?.freshness.message} /><button className="secondary-button" onClick={() => void refreshNow()} disabled={query.isFetching}><RefreshCw size={14} /> {query.isFetching ? 'Refreshing' : 'Refresh now'}</button></div></div>
       {query.data?.freshness.status === 'STALE' && <div className="alert-banner alert-warning"><RefreshCw size={16} /><span>Latest Bazaar snapshot is stale. Values remain visible for context, but are excluded from current signals.</span></div>}
       {query.isError && <div className="alert-banner alert-error"><span>{query.error instanceof Error ? query.error.message : 'Market data is temporarily unavailable.'}</span></div>}
+      {refreshError && <div className="alert-banner alert-error"><span>{refreshError}</span></div>}
 
       <div className="screener-toolbar"><div className="tab-row"><button className={filters.flipType === 'buy_order_to_sell_order' ? 'tab-active' : ''} onClick={() => update('flipType', 'buy_order_to_sell_order')}>Buy order → sell order</button><button className={filters.flipType === 'instant_buy_to_instant_sell' ? 'tab-active' : ''} onClick={() => update('flipType', 'instant_buy_to_instant_sell')}>Instant buy → instant sell</button></div><button className="filter-toggle" onClick={() => setShowFilters((value) => !value)}><SlidersHorizontal size={14} /> Filters <span>{showFilters ? '−' : '+'}</span></button></div>
       {showFilters && <div className="filter-panel"><div className="filter-search"><Search size={15} /><input value={filters.search} onChange={(event) => update('search', event.target.value)} placeholder="Search item or product ID" /></div><div className="filter-field"><label>Min ROI</label><input value={filters.minRoi} onChange={(event) => update('minRoi', event.target.value)} inputMode="decimal" placeholder="0" /><span>%</span></div><div className="filter-field"><label>Min profit</label><input value={filters.minProfit} onChange={(event) => update('minProfit', event.target.value)} inputMode="decimal" placeholder="0" /><span>coins</span></div><div className="filter-field"><label>Max capital</label><input value={filters.maxCapital} onChange={(event) => update('maxCapital', event.target.value)} inputMode="decimal" placeholder="Any" /><span>coins</span></div><div className="filter-field"><label>Min liquidity</label><input value={filters.minLiquidity} onChange={(event) => update('minLiquidity', event.target.value)} inputMode="decimal" placeholder="0" /><span>/100</span></div><div className="filter-field"><label>Min score</label><input value={filters.minScore} onChange={(event) => update('minScore', event.target.value)} inputMode="decimal" placeholder="55" /><span>/100</span></div><button className="text-button" onClick={() => setFilters(defaultFilters)}><Filter size={14} /> Reset</button></div>}

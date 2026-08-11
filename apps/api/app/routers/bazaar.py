@@ -16,7 +16,8 @@ from ..schemas import (
     CapitalOptimizeRequest,
     CapitalOptimizeResponse,
 )
-from ..services.collector import get_bazaar_status
+from ..services.collector import collect_bazaar, get_bazaar_status
+from ..services.hypixel_client import HypixelClient
 
 router = APIRouter(prefix="/bazaar", tags=["bazaar"])
 
@@ -99,6 +100,27 @@ async def status(
     settings: Settings = Depends(settings_dependency),
 ):
     return await get_bazaar_status(session, settings)
+
+
+@router.post("/refresh", summary="Fetch one fresh Bazaar snapshot in local development")
+async def refresh(
+    session: AsyncSession = Depends(session_dependency),
+    settings: Settings = Depends(settings_dependency),
+):
+    if settings.is_production:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Manual refresh is disabled in production; the background collector owns ingestion."
+            ),
+        )
+    try:
+        return await collect_bazaar(session, settings, client=HypixelClient(settings), redis=None)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Latest Bazaar snapshot could not be fetched.",
+        ) from exc
 
 
 @router.get(

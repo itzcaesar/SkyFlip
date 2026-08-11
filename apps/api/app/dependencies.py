@@ -17,5 +17,5 @@ async def session_dependency() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-def redis_dependency() -> Redis:
+def redis_dependency() -> Redis | None:
     return get_redis()

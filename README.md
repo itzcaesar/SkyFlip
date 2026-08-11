@@ -20,46 +20,45 @@ Auction House navigation is visible as a planned module but is disabled until it
 
 ## Requirements
 
-- Docker Desktop with Compose.
 - Node.js 20.9+ and pnpm 10+ for the web app.
 - Python 3.11+ locally; the provided container uses Python 3.12.
 - A Hypixel API key when the API account or endpoint requires one.
+- Docker Desktop is optional for the current local-first workflow.
 
 ## Local setup
 
 ```powershell
 Copy-Item .env.example .env
-docker compose up -d postgres redis
-
-cd apps/api
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-alembic upgrade head
+pip install -e ".\apps\api[dev]"
 
-# Terminal 1 — API
+# Terminal 1 — API + local SQLite collector
+cd apps/api
 uvicorn app.main:app --reload --port 8000
 
-# Terminal 2 — worker, from apps/api with the venv active
-$env:PYTHONPATH = (Get-Location).Path
-python ..\worker\worker.py
-
-# Terminal 3 — web
+# Terminal 2 — web
 cd ..\web
 pnpm install
 pnpm dev
 ```
 
-Or use Docker for the backend services after creating `.env`:
+In local mode, the API creates `data/skyflip.db` automatically and runs the Bazaar collector in-process when `LOCAL_COLLECTOR_ENABLED=true`. Redis, Docker, a separate worker, and a manual migration are not required.
+
+The first local API response may be `UNAVAILABLE` while the collector is making its first upstream request. That is an honest freshness state; wait for the next successful poll or inspect the API log for the upstream error.
+
+For later PostgreSQL/Redis integration testing, use Docker after creating `.env`:
 
 ```powershell
+cd C:\Projects\skyflip
+docker compose up -d postgres redis
 docker compose up --build api worker
 cd apps/web
 pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Real Bazaar data appears after the worker successfully completes its first cycle. If Hypixel or a service is unavailable, SkyFlip shows `UNAVAILABLE`, `DELAYED`, or `STALE`; it does not manufacture values.
+Open [http://localhost:3000](http://localhost:3000). Real Bazaar data appears after the local collector successfully completes its first cycle. If Hypixel or a service is unavailable, SkyFlip shows `UNAVAILABLE`, `DELAYED`, or `STALE`; it does not manufacture values.
 
 ## Tests and quality checks
 
@@ -97,6 +96,7 @@ docs/           Architecture and market-engine decisions
 
 - `GET /api/health`
 - `GET /api/bazaar/status`
+- `POST /api/bazaar/refresh` (development-only immediate upstream fetch)
 - `GET /api/bazaar/products`
 - `GET /api/bazaar/opportunities`
 - `GET /api/bazaar/products/{productId}`

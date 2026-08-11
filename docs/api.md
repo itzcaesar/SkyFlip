@@ -10,6 +10,8 @@ Useful query parameters include `search`, `min_profit`, `min_roi`, `max_capital`
 
 The response includes `items`, pagination, and a `freshness` object. Numeric fields are serialized as numbers; timestamps are ISO 8601.
 
+`POST /api/bazaar/refresh` performs one immediate upstream fetch in non-production local mode. Production ingestion remains worker-owned.
+
 ## Capital optimizer
 
 `POST /api/bazaar/capital-optimize`
@@ -19,4 +21,3 @@ The request accepts available capital, risk preference, maximum fill time, minim
 ## Live events
 
 `GET /api/events` is Server-Sent Events. Current event types include `bazaar.updated` and `market.warning`. The web app reconnects through the browser EventSource implementation and invalidates its query cache when a Bazaar update arrives.
-

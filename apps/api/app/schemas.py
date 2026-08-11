@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class HealthComponent(BaseModel):
-    status: Literal["ok", "degraded", "unavailable"]
+    status: Literal["ok", "degraded", "unavailable", "not_configured"]
     detail: str | None = None
 
 

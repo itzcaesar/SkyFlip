@@ -66,5 +66,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export function getBazaarPage(params: URLSearchParams) { return request<BazaarPage>(`/bazaar/products?${params.toString()}`); }
 export function getBazaarStatus() { return request<BazaarStatus>('/bazaar/status'); }
 export function getHealth() { return request<HealthResponse>('/health'); }
+export function refreshBazaar() { return request<Record<string, unknown>>('/bazaar/refresh', { method: 'POST' }); }
 export function getBazaarDetail(productId: string) { return request<BazaarDetail>(`/bazaar/products/${encodeURIComponent(productId)}`); }
 export function getBazaarHistory(productId: string, flipType = 'buy_order_to_sell_order') { return request<BazaarHistory>(`/bazaar/products/${encodeURIComponent(productId)}/history?flip_type=${flipType}`); }
