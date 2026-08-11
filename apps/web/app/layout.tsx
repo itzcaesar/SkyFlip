@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { QueryProvider } from '@/app/components/query-provider';
 import { TerminalShell } from '@/app/components/terminal-shell';
 import './globals.css';
+import './minecraft.css';
 
 export const metadata: Metadata = {
   title: 'SkyFlip — Market Intelligence',
@@ -19,4 +20,3 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     </html>
   );
 }
-

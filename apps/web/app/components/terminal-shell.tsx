@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Activity, Bell, Calculator, ChevronDown, LayoutDashboard, Radio, Search, Settings2, ShieldAlert, WalletCards } from 'lucide-react';
+import { Bell, Calculator, ChevronDown, LayoutDashboard, Pickaxe, Radio, Search, Settings2, ShieldAlert, WalletCards } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 
 const primary = [
@@ -43,33 +43,33 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
     <div className="app-frame">
       <aside className="sidebar">
         <div className="brand-block">
-          <div className="brand-mark"><Activity size={19} strokeWidth={2.5} /></div>
+          <div className="brand-mark"><Pickaxe size={19} strokeWidth={2.5} /></div>
           <div>
             <div className="brand-name">SkyFlip</div>
             <div className="brand-subtitle">MARKET INTELLIGENCE</div>
           </div>
         </div>
 
-        <div className="terminal-status"><span className="status-pulse" /> LIVE MARKET DESK</div>
+        <div className="terminal-status"><span className="status-pulse" /> OVERWORLD MARKET DESK</div>
 
         <nav className="nav-group" aria-label="Main navigation">
-          <div className="nav-label">Workspace</div>
+          <div className="nav-label">World</div>
           {primary.map((item) => <NavItem item={item} key={item.href} />)}
-          <div className="nav-label nav-label-spaced">Tools</div>
+          <div className="nav-label nav-label-spaced">Crafting table</div>
           {secondary.map((item) => <NavItem item={item} key={item.href} />)}
         </nav>
 
         <div className="sidebar-footnote">
           <ShieldAlert size={14} />
-          <span>Signals are estimates. Liquidity and freshness always matter.</span>
+          <span>No auto-trading. Check liquidity, risk, and freshness before acting.</span>
         </div>
       </aside>
 
       <main className="main-shell">
         <header className="topbar">
-          <div className="breadcrumb"><span>SKYFLIP</span><ChevronDown size={13} /><strong>MARKET DESK</strong></div>
+          <div className="breadcrumb"><span>SKYFLIP</span><ChevronDown size={13} /><strong>BAZAAR OVERWORLD</strong></div>
           <div className="topbar-actions">
-            <div className="market-clock"><Radio size={13} /> BAZAAR FEED <span className="clock-line" /></div>
+            <div className="market-clock"><Radio size={13} /> OVERWORLD FEED <span className="clock-line" /></div>
             <button className="icon-button" aria-label="Search"><Search size={16} /></button>
             <button className="user-chip" aria-label="User settings"><span className="user-avatar">G</span><span>Guest</span></button>
           </div>
@@ -79,4 +79,3 @@ export function TerminalShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-

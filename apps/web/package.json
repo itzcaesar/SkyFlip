@@ -12,6 +12,7 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@mojang/web-theme-bootstrap": "7.3.1",
     "@tanstack/react-query": "latest",
     "lucide-react": "latest",
     "next": "latest",
@@ -19,13 +20,13 @@
     "react-dom": "latest"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "latest",
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",
     "@testing-library/user-event": "latest",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "@tailwindcss/postcss": "latest",
     "@vitejs/plugin-react": "latest",
     "eslint": "^9.39.1",
     "eslint-config-next": "latest",
