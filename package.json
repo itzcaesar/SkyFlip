@@ -1,0 +1,15 @@
+{
+  "name": "skyflip",
+  "private": true,
+  "packageManager": "pnpm@10.8.1",
+  "scripts": {
+    "dev:web": "pnpm --filter @skyflip/web dev",
+    "build:web": "pnpm --filter @skyflip/web build",
+    "lint:web": "pnpm --filter @skyflip/web lint",
+    "test:web": "pnpm --filter @skyflip/web test",
+    "format:web": "pnpm --filter @skyflip/web format"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2"
+  }
+}

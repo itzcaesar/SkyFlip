@@ -1,0 +1,26 @@
+{
+  "_fixture_note": "DEVELOPMENT/TEST DATA ONLY. The production worker never loads this file.",
+  "success": true,
+  "lastUpdated": 1700000000000,
+  "products": {
+    "ENCHANTED_DIAMOND": {
+      "sell_summary": [
+        {"price": 110.0, "amount": 900, "orders": 4}
+      ],
+      "buy_summary": [
+        {"price": 100.0, "amount": 800, "orders": 3}
+      ],
+      "quick_status": {
+        "buyPrice": 110.0,
+        "sellPrice": 100.0,
+        "buyVolume": 1200,
+        "sellVolume": 1000,
+        "buyOrders": 6,
+        "sellOrders": 5,
+        "buyMovingWeek": 100000,
+        "sellMovingWeek": 110000
+      }
+    }
+  }
+}
+

@@ -1,0 +1,76 @@
+# ---- Dependencies ----
+node_modules/
+.pnpm-store/
+*.tgz
+
+# ---- Python ----
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.python-version
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+*.egg
+
+# ---- Python tooling caches ----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+coverage/
+.tox/
+.nox/
+.mr_cache/
+
+# ---- Next.js / Web ----
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+.eslintcache
+
+# ---- Tests ----
+coverage/
+junit.xml
+*.test.ts.snap
+
+# ---- Environment / secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Editors / OS ----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Misc ----
+data/
+temp/
+tmp/
