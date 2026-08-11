@@ -95,3 +95,8 @@ def test_bazaar_listing_endpoint_filters_and_serializes(client):
 def test_invalid_bazaar_query_returns_validation_error(client):
     response = client.get("/api/bazaar/products?min_score=not-a-number")
     assert response.status_code == 422
+
+
+def test_demo_endpoint_is_disabled_without_explicit_local_setting(client):
+    response = client.post("/api/bazaar/demo")
+    assert response.status_code == 403

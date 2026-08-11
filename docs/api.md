@@ -12,6 +12,8 @@ The response includes `items`, pagination, and a `freshness` object. Numeric fie
 
 `POST /api/bazaar/refresh` performs one immediate upstream fetch in non-production local mode. Production ingestion remains worker-owned.
 
+`POST /api/bazaar/demo` loads the deterministic local dataset only when `LOCAL_DEMO_ENABLED=true` and `APP_ENV` is not production. Responses expose `freshness.source=demo`, and the web app displays a `DEMO DATA` badge. Demo values are never a live-market fallback in production.
+
 ## Capital optimizer
 
 `POST /api/bazaar/capital-optimize`

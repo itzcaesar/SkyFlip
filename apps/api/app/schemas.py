@@ -21,6 +21,7 @@ class HealthResponse(BaseModel):
 
 class FreshnessResponse(BaseModel):
     status: Literal["LIVE", "DELAYED", "STALE", "UNAVAILABLE"]
+    source: Literal["hypixel", "demo"] | None = None
     last_success_at: datetime | None = None
     age_seconds: int | None = None
     message: str

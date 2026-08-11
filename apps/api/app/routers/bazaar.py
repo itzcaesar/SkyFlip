@@ -17,6 +17,7 @@ from ..schemas import (
     CapitalOptimizeResponse,
 )
 from ..services.collector import collect_bazaar, get_bazaar_status
+from ..services.demo_data import demo_bazaar_payload
 from ..services.hypixel_client import HypixelClient
 
 router = APIRouter(prefix="/bazaar", tags=["bazaar"])
@@ -121,6 +122,27 @@ async def refresh(
             status_code=503,
             detail="Latest Bazaar snapshot could not be fetched.",
         ) from exc
+
+
+@router.post("/demo", summary="Load the clearly labelled local Bazaar demo dataset")
+async def demo(
+    session: AsyncSession = Depends(session_dependency),
+    settings: Settings = Depends(settings_dependency),
+):
+    if settings.is_production or not settings.local_demo_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "The local demo dataset is disabled. Set LOCAL_DEMO_ENABLED=true in development."
+            ),
+        )
+    return await collect_bazaar(
+        session,
+        settings,
+        payload=demo_bazaar_payload(),
+        source="demo",
+        redis=None,
+    )
 
 
 @router.get(

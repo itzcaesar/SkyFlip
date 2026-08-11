@@ -22,20 +22,22 @@ export function Dashboard() {
   const bestRoi = [...top].sort((a, b) => b.roi - a.roi)[0];
   const bestLiquidity = [...top].sort((a, b) => b.estimated_liquidity - a.estimated_liquidity)[0];
   const freshness = status.data?.freshness ?? opportunities.data?.freshness;
+  const demoData = freshness?.source === 'demo';
 
   return (
     <>
       <LiveEvents />
       <div className="page-heading">
-        <div><div className="eyebrow">SESSION / OVERVIEW</div><h1>Market desk</h1><p>Evidence-first signals across the live Bazaar feed.</p></div>
-        <div className="heading-actions"><FreshnessBadge status={freshness?.status ?? (status.isLoading ? 'SYNCING' : 'UNAVAILABLE')} message={freshness?.message} /><Link href="/bazaar" className="primary-button">Open screener <ArrowUpRight size={15} /></Link></div>
+        <div><div className="eyebrow">SESSION / OVERVIEW</div><h1>Market desk</h1><p>{demoData ? 'Explore the local demo dataset while the live feed is unavailable.' : 'Evidence-first signals across the live Bazaar feed.'}</p></div>
+        <div className="heading-actions"><FreshnessBadge status={freshness?.status ?? (status.isLoading ? 'SYNCING' : 'UNAVAILABLE')} message={freshness?.message} source={freshness?.source} /><Link href="/bazaar" className="primary-button">Open screener <ArrowUpRight size={15} /></Link></div>
       </div>
 
       {status.isError && <div className="alert-banner alert-warning"><RefreshCw size={16} /><span>{status.error instanceof Error ? status.error.message : 'Market data is temporarily unavailable.'}</span></div>}
+      {demoData && <div className="alert-banner alert-demo"><span>DEMO DATA: these values are deterministic local examples, not live market prices. Use the screener refresh controls after the upstream feed is available.</span></div>}
 
       <section className="market-strip">
         <div className="strip-label"><span className="status-pulse" /> GLOBAL MARKET STATUS</div>
-        <div className="strip-stat"><span>API</span><strong>{freshness?.status === 'LIVE' ? 'CONNECTED' : freshness?.status ?? 'UNAVAILABLE'}</strong></div>
+        <div className="strip-stat"><span>API</span><strong>{demoData ? 'DEMO' : freshness?.status === 'LIVE' ? 'CONNECTED' : freshness?.status ?? 'UNAVAILABLE'}</strong></div>
         <div className="strip-stat"><span>LAST UPDATE</span><strong>{freshness?.age_seconds != null ? `${freshness.age_seconds}s ago` : '—'}</strong></div>
         <div className="strip-stat"><span>QUALIFIED SIGNALS</span><strong>{status.data?.qualified_opportunities ?? '—'}</strong></div>
         <div className="strip-stat"><span>WORKER</span><strong className={health.data?.worker.status === 'ok' ? 'text-green' : ''}>{health.data?.worker.status === 'ok' ? 'RUNNING' : health.data?.worker.status?.toUpperCase() ?? 'CHECKING'}</strong></div>

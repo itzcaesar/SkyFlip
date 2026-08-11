@@ -45,7 +45,7 @@ pnpm dev
 
 In local mode, the API creates `data/skyflip.db` automatically and runs the Bazaar collector in-process when `LOCAL_COLLECTOR_ENABLED=true`. Redis, Docker, a separate worker, and a manual migration are not required.
 
-The first local API response may be `UNAVAILABLE` while the collector is making its first upstream request. That is an honest freshness state; wait for the next successful poll or inspect the API log for the upstream error.
+The first local API response may be `UNAVAILABLE` while the collector is making its first upstream request. If `LOCAL_DEMO_ENABLED=true`, a failed live request loads a clearly labelled deterministic demo dataset so the local screener remains usable; it never runs in production and is never presented as a live price. You can also click `Load demo dataset` in the empty screener state.
 
 For later PostgreSQL/Redis integration testing, use Docker after creating `.env`:
 
@@ -58,7 +58,7 @@ pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Real Bazaar data appears after the local collector successfully completes its first cycle. If Hypixel or a service is unavailable, SkyFlip shows `UNAVAILABLE`, `DELAYED`, or `STALE`; it does not manufacture values.
+Open [http://localhost:3000](http://localhost:3000). Real Bazaar data appears after the local collector successfully completes its first cycle. If Hypixel or a service is unavailable and demo mode is disabled, SkyFlip shows `UNAVAILABLE`, `DELAYED`, or `STALE`; it does not silently manufacture values.
 
 ## Tests and quality checks
 
@@ -97,6 +97,7 @@ docs/           Architecture and market-engine decisions
 - `GET /api/health`
 - `GET /api/bazaar/status`
 - `POST /api/bazaar/refresh` (development-only immediate upstream fetch)
+- `POST /api/bazaar/demo` (development-only explicit local demo dataset)
 - `GET /api/bazaar/products`
 - `GET /api/bazaar/opportunities`
 - `GET /api/bazaar/products/{productId}`

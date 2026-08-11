@@ -1,5 +1,6 @@
 export type Freshness = {
   status: 'LIVE' | 'DELAYED' | 'STALE' | 'UNAVAILABLE';
+  source?: 'hypixel' | 'demo' | null;
   last_success_at?: string | null;
   age_seconds?: number | null;
   message: string;
@@ -67,5 +68,6 @@ export function getBazaarPage(params: URLSearchParams) { return request<BazaarPa
 export function getBazaarStatus() { return request<BazaarStatus>('/bazaar/status'); }
 export function getHealth() { return request<HealthResponse>('/health'); }
 export function refreshBazaar() { return request<Record<string, unknown>>('/bazaar/refresh', { method: 'POST' }); }
+export function loadDemoBazaar() { return request<Record<string, unknown>>('/bazaar/demo', { method: 'POST' }); }
 export function getBazaarDetail(productId: string) { return request<BazaarDetail>(`/bazaar/products/${encodeURIComponent(productId)}`); }
 export function getBazaarHistory(productId: string, flipType = 'buy_order_to_sell_order') { return request<BazaarHistory>(`/bazaar/products/${encodeURIComponent(productId)}/history?flip_type=${flipType}`); }

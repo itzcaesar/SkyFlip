@@ -31,7 +31,8 @@ class Settings(BaseSettings):
 
     hypixel_api_key: str | None = None
     hypixel_base_url: str = Field(default="https://api.hypixel.net")
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    local_demo_enabled: bool = False
 
     bazaar_sell_fee_rate: float = Field(default=0.0125, ge=0, lt=1)
     bazaar_buy_fee_rate: float = Field(default=0.0, ge=0, lt=1)

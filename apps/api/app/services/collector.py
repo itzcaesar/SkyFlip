@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from redis.asyncio import Redis
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import Settings
@@ -109,6 +109,8 @@ async def collect_bazaar(
     *,
     client: HypixelClient | None = None,
     redis: Redis | None = None,
+    payload: dict[str, Any] | None = None,
+    source: str = "hypixel",
 ) -> dict[str, int | bool | str]:
     """Fetch, normalize, persist, and publish a Bazaar snapshot.
 
@@ -120,18 +122,25 @@ async def collect_bazaar(
     now = utc_now()
     api_client = client or HypixelClient(settings)
     try:
-        payload = await api_client.fetch_bazaar()
+        market_payload = payload if payload is not None else await api_client.fetch_bazaar()
     except Exception:
         await mark_bazaar_stale(session)
         raise
 
-    products_payload = payload.get("products")
+    products_payload = market_payload.get("products")
     if not isinstance(products_payload, dict) or not products_payload:
         await mark_bazaar_stale(session)
         raise ValueError("Hypixel Bazaar response contained no products.")
 
-    source_updated_ms = _source_timestamp(payload, now)
-    payload_hash = _payload_hash(payload)
+    if source == "demo":
+        # Demo polling keeps freshness current but should not create a new history point for
+        # the same deterministic catalog on every local retry.
+        source_updated_ms = int(now.timestamp() * 1000)
+        hash_payload = {key: value for key, value in market_payload.items() if key != "lastUpdated"}
+    else:
+        source_updated_ms = _source_timestamp(market_payload, now)
+        hash_payload = market_payload
+    payload_hash = _payload_hash(hash_payload)
     existing_snapshot = await session.scalar(
         select(BazaarSnapshot).where(BazaarSnapshot.payload_hash == payload_hash)
     )
@@ -143,6 +152,7 @@ async def collect_bazaar(
                 source_updated_ms=source_updated_ms,
                 payload_hash=payload_hash,
                 product_count=len(products_payload),
+                source=source,
             )
         )
 
@@ -260,6 +270,7 @@ async def collect_bazaar(
         "qualified_opportunities": qualified_opportunities,
         "stale": source_is_stale,
         "payload_hash": payload_hash,
+        "source": source,
     }
 
 
@@ -282,10 +293,14 @@ async def get_bazaar_status(session: AsyncSession, settings: Settings) -> dict[s
         )
         or 0
     )
+    latest_snapshot = await session.scalar(
+        select(BazaarSnapshot).order_by(desc(BazaarSnapshot.fetched_at)).limit(1)
+    )
     return {
         "freshness": freshness_for(
             latest_success_at,
             stale_after_seconds=settings.bazaar_stale_after_seconds,
+            source=latest_snapshot.source if latest_snapshot else None,
         ),
         "active_products": active_products,
         "qualified_opportunities": qualified,
