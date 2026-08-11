@@ -94,9 +94,15 @@ input:focus-visible {
 }
 
 .sidebar {
-  position: relative;
-  width: 250px;
-  flex-basis: 250px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  align-self: flex-start;
+  width: 242px;
+  flex-basis: 242px;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
   border-right: 6px solid #111;
   background-color: #426724;
   background-image:
@@ -105,6 +111,19 @@ input:focus-visible {
   background-position: center, center;
   background-size: cover, 380px 380px;
   box-shadow: inset -4px 0 0 rgba(255, 255, 255, .18), 7px 0 0 rgba(0, 0, 0, .24);
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 7px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, .35);
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: #8b8b8b;
+  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, .35), inset -2px -2px 0 rgba(0, 0, 0, .35);
 }
 
 .sidebar::before {
@@ -248,6 +267,9 @@ th,
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 35;
   height: 68px;
   border-bottom: 5px solid #171717;
   background: var(--panel);
@@ -807,8 +829,14 @@ td {
 
 @media (max-width: 760px) {
   .sidebar {
+    position: relative;
+    top: auto;
+    z-index: auto;
     width: auto;
     flex-basis: auto;
+    height: auto;
+    max-height: none;
+    overflow: visible;
     border-right: 0;
     border-bottom: 6px solid #111;
   }
