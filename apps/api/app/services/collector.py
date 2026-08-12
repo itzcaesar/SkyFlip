@@ -38,6 +38,13 @@ async def mark_bazaar_stale(session: AsyncSession) -> int:
     Values are never replaced with fakes.
     """
 
+    products = list((await session.scalars(select(BazaarProduct))).all())
+    for product in products:
+        # A failed cycle must not leave the previous product set looking current. The
+        # rows remain stored for history/detail inspection, but a successful cycle must
+        # explicitly reactivate them before they can appear in current screens.
+        product.is_active = False
+
     opportunities = list((await session.scalars(select(BazaarOpportunity))).all())
     for opportunity in opportunities:
         opportunity.is_stale = True
@@ -275,7 +282,11 @@ async def collect_bazaar(
 
 
 async def get_bazaar_status(session: AsyncSession, settings: Settings) -> dict[str, Any]:
-    latest_success_at = await session.scalar(select(func.max(BazaarProduct.last_success_at)))
+    # Only an active product set represents a currently usable snapshot. A previous
+    # successful timestamp must not keep the status LIVE after a failed refresh.
+    latest_success_at = await session.scalar(
+        select(func.max(BazaarProduct.last_success_at)).where(BazaarProduct.is_active.is_(True))
+    )
     latest_source_updated_ms = await session.scalar(
         select(func.max(BazaarProduct.last_source_updated_ms))
     )

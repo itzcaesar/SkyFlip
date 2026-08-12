@@ -45,7 +45,7 @@ pnpm dev
 
 In local mode, the API creates `data/skyflip.db` automatically and runs the Bazaar collector in-process when `LOCAL_COLLECTOR_ENABLED=true`. Redis, Docker, a separate worker, and a manual migration are not required.
 
-The first local API response may be `UNAVAILABLE` while the collector is making its first upstream request. If `LOCAL_DEMO_ENABLED=true`, a failed live request loads a clearly labelled deterministic demo dataset so the local screener remains usable; it never runs in production and is never presented as a live price. You can also click `Load demo dataset` in the empty screener state.
+The first local API response may be `UNAVAILABLE` while the collector is making its first upstream request. Local mode uses the upstream Hypixel Bazaar feed by default and never substitutes fake prices. If you intentionally set `LOCAL_DEMO_ENABLED=true` in development, a failed live request may load a clearly labelled deterministic fixture, and the development-only `POST /api/bazaar/demo` endpoint can be used for UI testing.
 
 For later PostgreSQL/Redis integration testing, use Docker after creating `.env`:
 
