@@ -7,6 +7,8 @@ from app.models import Base, BazaarHistoryPoint, BazaarSnapshot
 from app.redis_client import check_redis
 from app.services.collector import collect_bazaar, get_bazaar_status, mark_bazaar_stale
 from app.services.demo_data import demo_bazaar_payload
+from app.services.preferences import get_runtime_settings
+from app.services.retention import prune_local_history
 
 
 def test_local_defaults_are_self_contained() -> None:
@@ -84,3 +86,29 @@ async def test_failed_collection_cannot_remain_live() -> None:
     assert status["freshness"].source is None
     assert status["active_products"] == 0
     assert status["qualified_opportunities"] == 0
+
+
+@pytest.mark.asyncio
+async def test_local_settings_override_and_retention() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    settings = Settings(
+        _env_file=None,
+        database_url="sqlite+aiosqlite:///:memory:",
+        bazaar_history_retention_days=1,
+    )
+
+    async with session_factory() as session:
+        await collect_bazaar(session, settings, payload=demo_bazaar_payload(), source="demo")
+        runtime = await get_runtime_settings(session, settings)
+        assert runtime.bazaar_sell_fee_rate == settings.bazaar_sell_fee_rate
+        result = await prune_local_history(
+            session, settings, now=datetime.now(UTC) + timedelta(days=2)
+        )
+
+    await engine.dispose()
+    assert result["history_deleted"] > 0

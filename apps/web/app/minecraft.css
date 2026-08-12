@@ -864,3 +864,88 @@ td {
     padding-left: 9px;
   }
 }
+
+.tool-form,
+.tool-result,
+.settings-form,
+.watchlist-card,
+.valuation-search,
+.alert-list {
+  background: #c6c6c6;
+  color: #303030;
+  box-shadow: inset 3px 3px 0 rgba(255, 255, 255, .72), inset -3px -3px 0 rgba(0, 0, 0, .48), 5px 5px 0 rgba(0, 0, 0, .36);
+}
+
+.form-field > span,
+.result-summary span,
+.result-table-head,
+.watchlist-thresholds span,
+.alert-meta,
+.muted-copy {
+  color: #4e4e4e;
+  text-shadow: 1px 1px 0 rgba(255, 255, 255, .35);
+}
+
+.form-field input,
+.form-field select,
+.input-with-unit,
+.result-summary > div,
+.watchlist-thresholds span {
+  border: 0;
+  background: #3b3b3b;
+  color: #fff;
+  box-shadow: inset 3px 3px 0 #171717, inset -3px -3px 0 #a7a7a7;
+}
+
+.form-field input,
+.form-field select,
+.input-with-unit input {
+  color: #fff;
+  text-shadow: 2px 2px 0 #171717;
+}
+
+.input-with-unit em {
+  color: #d9d9d9;
+  text-shadow: 2px 2px 0 #171717;
+}
+
+.result-summary > div {
+  color: #fff;
+  border: 0;
+}
+
+.result-summary strong,
+.result-table-row strong,
+.watchlist-card-top strong,
+.alert-copy strong,
+.suggestion strong {
+  color: #242424;
+  text-shadow: 1px 1px 0 rgba(255, 255, 255, .35);
+}
+
+.result-table-row,
+.alert-row {
+  border-bottom-color: #929292;
+  color: #4e4e4e;
+}
+
+.suggestion:hover,
+.watchlist-card:hover {
+  background: var(--mc-highlight);
+  color: #fff;
+}
+
+.alert-success {
+  background: #5c9839;
+  color: #fff;
+}
+
+.valuation-footer,
+.valuation-footer span,
+.alert-time,
+.alert-meta,
+.watchlist-current,
+.watchlist-current .muted-copy {
+  color: #4e4e4e;
+  text-shadow: 1px 1px 0 rgba(255, 255, 255, .35);
+}

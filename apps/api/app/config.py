@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     bazaar_stale_after_seconds: int = Field(default=120, ge=15)
     bazaar_poll_seconds: int = Field(default=30, ge=5)
     bazaar_max_retries: int = Field(default=3, ge=1, le=8)
+    bazaar_max_signal_roi_percent: float = Field(default=500.0, ge=100, le=1_000_000)
+    bazaar_max_price_ratio: float = Field(default=10.0, ge=2, le=10_000)
+    bazaar_history_retention_days: int = Field(default=7, ge=1, le=365)
+    bazaar_snapshot_retention_days: int = Field(default=30, ge=1, le=3_650)
 
     @field_validator("hypixel_base_url")
     @classmethod

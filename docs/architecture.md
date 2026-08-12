@@ -25,7 +25,7 @@ The API is read-oriented for market data. The worker owns upstream collection an
 
 Development defaults use a file-backed SQLite database. The API creates the schema on startup and can run the Bazaar collector in-process when `LOCAL_COLLECTOR_ENABLED=true`. Redis is optional; without it, live SSE publication is disabled and the web app continues polling the API. The separate worker remains available for later multi-process/PostgreSQL deployments.
 
-Local development may set `LOCAL_DEMO_ENABLED=true`. When the in-process collector cannot reach Hypixel, it loads a deterministic, explicitly labelled demo payload so the UI and scoring workflow can be exercised without confusing sample values for live prices. The source is carried in every freshness response.
+Local development may set `LOCAL_DEMO_ENABLED=true` intentionally. When enabled and the in-process collector cannot reach Hypixel, it loads a deterministic, explicitly labelled demo payload so the UI and scoring workflow can be exercised without confusing sample values for live prices. The default is false; live mode reports unavailable data instead of substituting samples. Local post-commit maintenance prunes history/snapshots and evaluates watchlist alerts.
 
 ## Service boundaries
 

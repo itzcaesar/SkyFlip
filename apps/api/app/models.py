@@ -40,6 +40,7 @@ class BazaarProduct(Base):
 
     opportunities: Mapped[list["BazaarOpportunity"]] = relationship(back_populates="product")
     history: Mapped[list["BazaarHistoryPoint"]] = relationship(back_populates="product")
+    watchlists: Mapped[list["WatchlistItem"]] = relationship(back_populates="product")
 
 
 class BazaarSnapshot(Base):
@@ -133,6 +134,33 @@ class BazaarHistoryPoint(Base):
     )
 
 
+class WatchlistItem(Base):
+    __tablename__ = "watchlist_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    product_id: Mapped[str] = mapped_column(
+        ForeignKey("bazaar_products.product_id", ondelete="CASCADE"), nullable=False
+    )
+    flip_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    min_score: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False, default=70)
+    min_profit: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False, default=0)
+    min_roi: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    product: Mapped[BazaarProduct] = relationship(back_populates="watchlists")
+
+    __table_args__ = (
+        UniqueConstraint("product_id", "flip_type", name="uq_watchlist_product_flip"),
+        Index("ix_watchlist_active", "is_active"),
+    )
+
+
 class AlertEvent(Base):
     __tablename__ = "alert_events"
 
@@ -151,3 +179,13 @@ class AlertEvent(Base):
     )
 
     __table_args__ = (Index("ix_alert_events_created_at", "created_at"),)
+
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )

@@ -13,7 +13,7 @@ from .config import get_settings
 from .database import engine, ensure_local_schema
 from .dependencies import redis_dependency
 from .redis_client import get_redis
-from .routers import bazaar, health, items
+from .routers import alerts, bazaar, health, items, settings, valuator
 from .services.events import redis_event_stream
 from .services.local_collector import run_local_collector
 
@@ -54,7 +54,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
@@ -79,6 +79,9 @@ async def unexpected_error(_: Request, exc: Exception):
 app.include_router(health.router, prefix="/api")
 app.include_router(bazaar.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
+app.include_router(alerts.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")
+app.include_router(valuator.router, prefix="/api")
 
 
 @app.get("/api/events", tags=["live"], summary="Stream market updates over Server-Sent Events")

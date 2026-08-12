@@ -62,3 +62,28 @@ def test_zero_volume_is_not_presented_as_a_qualified_flip() -> None:
 
 def test_missing_price_fields_produce_no_fabricated_result() -> None:
     assert compute_bazaar_opportunities("MISSING", {"quick_status": {}}) == []
+
+
+def test_sanity_limits_keep_extreme_quotes_out_of_qualified_signals() -> None:
+    product = sample_product()
+    product["quick_status"]["sellPrice"] = 100
+    product["quick_status"]["buyPrice"] = 10_000
+    results = compute_bazaar_opportunities("ANOMALOUS", product)
+    order_flip = next(result for result in results if result.flip_type == BUY_ORDER_TO_SELL_ORDER)
+
+    assert order_flip.is_qualified is False
+    assert order_flip.manipulation_risk in {"HIGH", "EXTREME"}
+    assert any("sanity limit" in explanation for explanation in order_flip.signal_explanations)
+
+
+def test_history_supplies_volatility_and_momentum() -> None:
+    results = compute_bazaar_opportunities(
+        "HISTORY_ITEM",
+        sample_product(),
+        history_prices=[(100, 100), (100, 110), (100, 121)],
+        history_samples=3,
+    )
+    order_flip = next(result for result in results if result.flip_type == BUY_ORDER_TO_SELL_ORDER)
+
+    assert order_flip.volatility is not None
+    assert order_flip.short_term_momentum == 21

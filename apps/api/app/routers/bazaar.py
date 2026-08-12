@@ -69,7 +69,11 @@ def _filters(
     flip_type: str,
     include_stale: bool,
 ):
-    filters = [BazaarOpportunity.flip_type == flip_type, BazaarProduct.is_active.is_(True)]
+    filters = [
+        BazaarOpportunity.flip_type == flip_type,
+        BazaarOpportunity.is_qualified.is_(True),
+        BazaarProduct.is_active.is_(True),
+    ]
     if not include_stale:
         filters.append(BazaarOpportunity.is_stale.is_(False))
     if search:
@@ -319,6 +323,7 @@ async def capital_optimize(
                 BazaarOpportunity.flip_type == "buy_order_to_sell_order",
                 BazaarOpportunity.is_stale.is_(False),
                 BazaarOpportunity.is_qualified.is_(True),
+                BazaarProduct.is_active.is_(True),
                 BazaarOpportunity.roi >= request.minimum_roi,
                 BazaarOpportunity.estimated_liquidity >= request.minimum_liquidity,
                 BazaarOpportunity.manipulation_risk_score <= risk_limit,

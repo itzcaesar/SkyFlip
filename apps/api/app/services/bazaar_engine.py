@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from statistics import pstdev
 from typing import Any
 
 from .scoring import BazaarScoreInput, clamp, classify_risk, score_bazaar_opportunity
@@ -97,6 +98,9 @@ def _make_result(
     sell_levels: list[dict[str, Any]],
     fee_policy: BazaarFeePolicy,
     history_samples: int = 0,
+    history_prices: list[tuple[float, float]] | None = None,
+    max_reasonable_roi_percent: float = 1_000.0,
+    max_price_ratio: float = 50.0,
 ) -> BazaarResult:
     raw_spread = sell_price - buy_price
     spread_percentage = raw_spread / buy_price * 100 if buy_price > 0 else 0.0
@@ -134,10 +138,21 @@ def _make_result(
         estimated_fill_time_seconds = max(60, int(suggested_volume / units_per_second))
 
     competition_score = round(clamp((active_buy_orders + active_sell_orders) / 25 * 100), 2)
-    # A single live snapshot cannot prove historical stability, so volatility stays unknown
-    # until a history-aware aggregation job supplies it.
-    volatility = None
+    historical_sell_prices = [sell for _, sell in (history_prices or []) if sell > 0]
+    returns = [
+        (current - previous) / previous * 100
+        for previous, current in zip(
+            historical_sell_prices, historical_sell_prices[1:], strict=False
+        )
+        if previous > 0
+    ]
+    volatility = round(min(100, pstdev(returns)), 2) if returns else None
     momentum = None
+    if len(historical_sell_prices) >= 2 and historical_sell_prices[0] > 0:
+        momentum = round(
+            clamp((historical_sell_prices[-1] / historical_sell_prices[0] - 1) * 100, -100, 100),
+            2,
+        )
     capital_efficiency = round(clamp(roi * 5), 2)
 
     manipulation_risk_score = 15.0
@@ -149,6 +164,20 @@ def _make_result(
         manipulation_risk_score += 20
     if raw_spread <= 0:
         manipulation_risk_score += 10
+    anomaly_reasons: list[str] = []
+    price_ratio = sell_price / buy_price if buy_price > 0 else 0
+    if raw_spread <= 0:
+        anomaly_reasons.append("The exit quote is not above the entry quote.")
+    if roi > max_reasonable_roi_percent:
+        anomaly_reasons.append(
+            f"ROI exceeds the {max_reasonable_roi_percent:,.0f}% sanity limit."
+        )
+    if price_ratio > max_price_ratio:
+        anomaly_reasons.append(
+            f"Quote ratio is {price_ratio:,.1f}x, above the {max_price_ratio:,.0f}x sanity limit."
+        )
+    if anomaly_reasons:
+        manipulation_risk_score = max(manipulation_risk_score + 35, 85)
     manipulation_risk_score = round(clamp(manipulation_risk_score), 2)
     manipulation_risk = classify_risk(manipulation_risk_score)
 
@@ -162,6 +191,8 @@ def _make_result(
         78.0 if history_samples < 10 else 95.0, confidence_score + min(history_samples, 20) * 0.75
     )
     confidence_score = round(clamp(confidence_score), 2)
+    if anomaly_reasons:
+        confidence_score = min(confidence_score, 35.0)
 
     score = score_bazaar_opportunity(
         BazaarScoreInput(
@@ -194,6 +225,8 @@ def _make_result(
         explanations.append(
             "Confidence is capped because historical observations are not available yet."
         )
+    for reason in anomaly_reasons:
+        explanations.append(f"Sanity check: {reason} Treat this quote as an anomaly.")
     if manipulation_risk_score >= 60:
         explanations.append("Thin order-book evidence increases manipulation/anomaly risk.")
 
@@ -227,7 +260,12 @@ def _make_result(
         opportunity_score=score.score,
         classification=score.classification,
         capital_required=round(capital_required, 8),
-        is_qualified=net_profit > 0 and suggested_volume > 0 and confidence_score >= 50,
+        is_qualified=(
+            net_profit > 0
+            and suggested_volume > 0
+            and confidence_score >= 50
+            and not anomaly_reasons
+        ),
         score_breakdown=score.breakdown,
         signal_explanations=explanations,
     )
@@ -239,6 +277,10 @@ def compute_bazaar_opportunities(
     *,
     fee_policy: BazaarFeePolicy | None = None,
     history_samples: int = 0,
+    history_prices: list[tuple[float, float]] | None = None,
+    history_prices_by_flip: dict[str, list[tuple[float, float]]] | None = None,
+    max_reasonable_roi_percent: float = 1_000.0,
+    max_price_ratio: float = 50.0,
 ) -> list[BazaarResult]:
     """Compute both supported Bazaar strategies from one normalized Hypixel product."""
 
@@ -269,6 +311,11 @@ def compute_bazaar_opportunities(
             sell_levels=sell_levels,
             fee_policy=policy,
             history_samples=history_samples,
+            history_prices=(history_prices_by_flip or {}).get(
+                BUY_ORDER_TO_SELL_ORDER, history_prices or []
+            ),
+            max_reasonable_roi_percent=max_reasonable_roi_percent,
+            max_price_ratio=max_price_ratio,
         ),
         _make_result(
             product_id,
@@ -280,5 +327,10 @@ def compute_bazaar_opportunities(
             sell_levels=sell_levels,
             fee_policy=policy,
             history_samples=history_samples,
+            history_prices=(history_prices_by_flip or {}).get(
+                INSTANT_BUY_TO_INSTANT_SELL, history_prices or []
+            ),
+            max_reasonable_roi_percent=max_reasonable_roi_percent,
+            max_price_ratio=max_price_ratio,
         ),
     ]

@@ -10,10 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import Settings
 from ..models import BazaarHistoryPoint, BazaarOpportunity, BazaarProduct, BazaarSnapshot
+from .alerts import refresh_watchlist_alerts
 from .bazaar_engine import BazaarFeePolicy, compute_bazaar_opportunities, humanize_product_id
 from .events import publish_event
 from .freshness import freshness_for, utc_now
 from .hypixel_client import HypixelClient
+from .preferences import get_runtime_settings
+from .retention import prune_local_history
 
 logger = logging.getLogger(__name__)
 
@@ -99,15 +102,23 @@ def _copy_result(
         setattr(opportunity, key, value)
 
 
-async def _history_counts(session: AsyncSession) -> dict[tuple[str, str], int]:
+async def _history_prices(
+    session: AsyncSession,
+) -> dict[tuple[str, str], list[tuple[float, float]]]:
     rows = await session.execute(
         select(
             BazaarHistoryPoint.product_id,
             BazaarHistoryPoint.flip_type,
-            func.count(BazaarHistoryPoint.id),
-        ).group_by(BazaarHistoryPoint.product_id, BazaarHistoryPoint.flip_type)
+            BazaarHistoryPoint.buy_price,
+            BazaarHistoryPoint.sell_price,
+        ).order_by(BazaarHistoryPoint.observed_at)
     )
-    return {(product_id, flip_type): int(count) for product_id, flip_type, count in rows.all()}
+    samples: dict[tuple[str, str], list[tuple[float, float]]] = {}
+    for product_id, flip_type, buy_price, sell_price in rows.all():
+        samples.setdefault((product_id, flip_type), []).append(
+            (float(buy_price), float(sell_price))
+        )
+    return samples
 
 
 async def collect_bazaar(
@@ -127,6 +138,7 @@ async def collect_bazaar(
     """
 
     now = utc_now()
+    effective_settings = await get_runtime_settings(session, settings)
     api_client = client or HypixelClient(settings)
     try:
         market_payload = payload if payload is not None else await api_client.fetch_bazaar()
@@ -170,13 +182,13 @@ async def collect_bazaar(
         (row.product_id, row.flip_type): row
         for row in (await session.scalars(select(BazaarOpportunity))).all()
     }
-    history_counts = await _history_counts(session)
+    history_prices = await _history_prices(session)
     fee_policy = BazaarFeePolicy(
-        buy_fee_rate=settings.bazaar_buy_fee_rate,
-        sell_fee_rate=settings.bazaar_sell_fee_rate,
+        buy_fee_rate=effective_settings.bazaar_buy_fee_rate,
+        sell_fee_rate=effective_settings.bazaar_sell_fee_rate,
     )
     source_age_seconds = max(0, int(now.timestamp() - source_updated_ms / 1000))
-    source_is_stale = source_age_seconds > settings.bazaar_stale_after_seconds
+    source_is_stale = source_age_seconds > effective_settings.bazaar_stale_after_seconds
 
     # The upstream response is the current market set. Anything not revalidated by this
     # cycle is hidden from current screens until a later successful observation restores it.
@@ -210,7 +222,17 @@ async def collect_bazaar(
             product_id,
             product_payload,
             fee_policy=fee_policy,
-            history_samples=history_counts.get((product_id, "buy_order_to_sell_order"), 0),
+            history_samples=len(history_prices.get((product_id, "buy_order_to_sell_order"), [])),
+            history_prices_by_flip={
+                "buy_order_to_sell_order": history_prices.get(
+                    (product_id, "buy_order_to_sell_order"), []
+                ),
+                "instant_buy_to_instant_sell": history_prices.get(
+                    (product_id, "instant_buy_to_instant_sell"), []
+                ),
+            },
+            max_reasonable_roi_percent=effective_settings.bazaar_max_signal_roi_percent,
+            max_price_ratio=effective_settings.bazaar_max_price_ratio,
         )
         if not results:
             # Keep the product identity searchable, but do not present old metrics as fresh
@@ -255,6 +277,12 @@ async def collect_bazaar(
         processed_products += 1
 
     await session.commit()
+    try:
+        await prune_local_history(session, effective_settings, now=now)
+        await refresh_watchlist_alerts(session)
+    except Exception:
+        # Retention and notifications are secondary to a committed market snapshot.
+        logger.exception("bazaar_post_commit_maintenance_failed")
     event_payload = {
         "products": processed_products,
         "opportunities": processed_opportunities,
@@ -282,6 +310,7 @@ async def collect_bazaar(
 
 
 async def get_bazaar_status(session: AsyncSession, settings: Settings) -> dict[str, Any]:
+    effective_settings = await get_runtime_settings(session, settings)
     # Only an active product set represents a currently usable snapshot. A previous
     # successful timestamp must not keep the status LIVE after a failed refresh.
     latest_success_at = await session.scalar(
@@ -310,7 +339,7 @@ async def get_bazaar_status(session: AsyncSession, settings: Settings) -> dict[s
     return {
         "freshness": freshness_for(
             latest_success_at,
-            stale_after_seconds=settings.bazaar_stale_after_seconds,
+            stale_after_seconds=effective_settings.bazaar_stale_after_seconds,
             source=latest_snapshot.source if latest_snapshot else None,
         ),
         "active_products": active_products,

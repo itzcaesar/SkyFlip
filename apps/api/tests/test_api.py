@@ -100,3 +100,33 @@ def test_invalid_bazaar_query_returns_validation_error(client):
 def test_demo_endpoint_is_disabled_without_explicit_local_setting(client):
     response = client.post("/api/bazaar/demo")
     assert response.status_code == 403
+
+
+def test_local_tools_and_watchlist_endpoints(client):
+    watchlist = client.post(
+        "/api/watchlist",
+        json={
+            "product_id": "TEST_ITEM",
+            "flip_type": "buy_order_to_sell_order",
+            "min_score": 70,
+        },
+    )
+    assert watchlist.status_code == 200
+    assert watchlist.json()["product_name"] == "Test Item"
+
+    alerts = client.get("/api/alerts")
+    assert alerts.status_code == 200
+    assert alerts.json()[0]["item_key"] == "TEST_ITEM:buy_order_to_sell_order"
+
+    valuation = client.get("/api/valuator?product_id=TEST_ITEM")
+    assert valuation.status_code == 200
+    assert valuation.json()["current_buy_order"] == 100
+
+    settings = client.patch("/api/settings", json={"max_signal_roi_percent": 500})
+    assert settings.status_code == 200
+    assert settings.json()["max_signal_roi_percent"] == 500
+    assert "max_signal_roi_percent" in settings.json()["persisted_overrides"]
+
+    removed = client.delete(f"/api/watchlist/{watchlist.json()['id']}")
+    assert removed.status_code == 200
+    assert client.get("/api/watchlist").json() == []

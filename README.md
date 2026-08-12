@@ -12,8 +12,9 @@ The Auction House pipeline and informational Fabric companion are intentionally 
 - PostgreSQL schema and Alembic migration for Bazaar snapshots, normalized metrics, history, and alert-event storage.
 - Redis-backed worker lock, heartbeat, and SSE event channel.
 - Hypixel Bazaar collector with timeout handling, retries, rate-limit handling, idempotent snapshot hashing, and stale-data propagation.
-- Bazaar order→sell and instant→instant analytics, configurable fees, liquidity/fill estimates, confidence, risk, and explainable 0–100 opportunity scoring.
-- Next.js terminal-style Dashboard, Bazaar screener, and Bazaar item detail/history views.
+- Bazaar order→sell and instant→instant analytics, configurable fees, liquidity/fill estimates, history-aware volatility/momentum, anomaly gates, confidence, risk, and explainable 0–100 opportunity scoring.
+- Local watchlists and throttled alerts, persisted market settings, capital allocation calculator, and history-based item valuation.
+- Next.js terminal-style Dashboard, Bazaar screener, item detail/history, alerts, tools, and settings views.
 - Core Python and frontend tests.
 
 Auction House navigation is visible as a planned module but is disabled until its item normalization and comparable-sales dependencies are implemented. The UI never falls back to fake production prices.
@@ -46,6 +47,8 @@ pnpm dev
 In local mode, the API creates `data/skyflip.db` automatically and runs the Bazaar collector in-process when `LOCAL_COLLECTOR_ENABLED=true`. Redis, Docker, a separate worker, and a manual migration are not required.
 
 The first local API response may be `UNAVAILABLE` while the collector is making its first upstream request. Local mode uses the upstream Hypixel Bazaar feed by default and never substitutes fake prices. If you intentionally set `LOCAL_DEMO_ENABLED=true` in development, a failed live request may load a clearly labelled deterministic fixture, and the development-only `POST /api/bazaar/demo` endpoint can be used for UI testing.
+
+The local settings screen persists fee, freshness, anomaly, and retention overrides in SQLite. Watchlists and alerts are single-profile local features until authentication is introduced. History is automatically pruned according to the local retention settings.
 
 For later PostgreSQL/Redis integration testing, use Docker after creating `.env`:
 
@@ -104,6 +107,10 @@ docs/           Architecture and market-engine decisions
 - `GET /api/bazaar/products/{productId}/history`
 - `POST /api/bazaar/capital-optimize`
 - `GET /api/items/search?q=...`
+- `GET/PATCH/DELETE /api/settings`
+- `GET/POST/DELETE /api/watchlist`
+- `GET /api/alerts`, `POST /api/alerts/{id}/read`, `POST /api/alerts/read-all`
+- `GET /api/valuator?product_id=...`
 - `GET /api/events` (SSE)
 
 ## Data policy
@@ -116,6 +123,7 @@ The configured Bazaar fee policy is centralized in `apps/api/app/config.py` and 
 
 ## Roadmap
 
-1. Expand Bazaar aggregation, alert events, watchlists, settings, and capital allocation UX.
-2. Add Auction House ingestion, NBT/item normalization, fingerprints, comparable matching, valuation, anomaly detection, and mispricing screens.
+1. Add Auction House ingestion, NBT/item normalization, fingerprints, comparable matching, valuation, anomaly detection, and mispricing screens.
+2. Add authentication and multi-profile watchlists after the local single-profile workflow is stable.
 3. Add the informational Fabric companion after the web/backend core is stable.
+4. Move from local SQLite to PostgreSQL/Redis worker deployment with production monitoring.

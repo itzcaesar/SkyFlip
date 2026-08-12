@@ -9,9 +9,8 @@ The engine calculates spread, fee-adjusted net profit, ROI, suggested volume, vi
 
 ### Known-data boundaries
 
-Volatility and momentum remain `null` until multiple observations can support them. Fill time remains `Unknown` when moving-week volume is absent. A zero-volume book is not treated as a profitable opportunity. Confidence is capped below 95% when fewer than ten historical observations exist, so one live snapshot cannot create false certainty.
+Volatility and momentum are derived from retained sell-price observations when history exists. Fill time remains `Unknown` when moving-week volume is absent. A zero-volume book is not treated as a profitable opportunity. Confidence is capped below 95% when fewer than ten historical observations exist, so one live snapshot cannot create false certainty. Configurable ROI and quote-ratio sanity limits keep extreme outliers visible for inspection but out of qualified screens.
 
 ### Fee policy
 
 The fee policy is configured with `BAZAAR_BUY_FEE_RATE` and `BAZAAR_SELL_FEE_RATE`. It is not scattered through route or UI code. If Hypixel fee rules change, update the policy and tests together.
-
