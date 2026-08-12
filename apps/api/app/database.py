@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from .config import get_settings
@@ -12,7 +12,26 @@ if settings.database_url.startswith("sqlite") and ":memory:" not in settings.dat
     sqlite_path = settings.database_url.partition("///")[2]
     if sqlite_path:
         Path(sqlite_path).parent.mkdir(parents=True, exist_ok=True)
-engine = create_async_engine(settings.database_url, echo=False, pool_pre_ping=True)
+engine_options: dict[str, object] = {"echo": False, "pool_pre_ping": True}
+if settings.database_url.startswith("sqlite"):
+    # WAL lets the UI keep reading while the local Auction House collector commits a
+    # large page sweep. The timeout also turns a brief batch collision into a wait instead
+    # of a failed collection cycle.
+    engine_options["connect_args"] = {"timeout": 60}
+engine = create_async_engine(settings.database_url, **engine_options)
+
+
+if settings.database_url.startswith("sqlite"):
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _configure_sqlite(connection, _record) -> None:
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=60000")
+        cursor.close()
+
+
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

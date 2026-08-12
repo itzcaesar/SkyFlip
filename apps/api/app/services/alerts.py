@@ -4,6 +4,7 @@ from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import AlertEvent, BazaarOpportunity, BazaarProduct, WatchlistItem
+from .alert_preferences import get_alert_preferences
 
 
 def _alert_payload(row: AlertEvent) -> dict:
@@ -54,6 +55,12 @@ async def mark_all_alerts_read(session: AsyncSession) -> int:
 async def refresh_watchlist_alerts(session: AsyncSession) -> int:
     """Create a throttled alert when a watched item crosses its local threshold."""
 
+    preferences = await get_alert_preferences(session)
+    if not bool(preferences["enabled"]):
+        return 0
+    severity_rank = {"LOW": 1, "MEDIUM": 2, "HIGH": 3}
+    minimum_severity = str(preferences["minimum_severity"])
+    cooldown_minutes = int(preferences["cooldown_minutes"])
     rows = (
         await session.execute(
             select(WatchlistItem, BazaarProduct, BazaarOpportunity)
@@ -93,9 +100,11 @@ async def refresh_watchlist_alerts(session: AsyncSession) -> int:
             last_created = last.created_at
             if last_created.tzinfo is None:
                 last_created = last_created.replace(tzinfo=UTC)
-            if now - last_created < timedelta(minutes=5):
+            if now - last_created < timedelta(minutes=cooldown_minutes):
                 continue
         severity = "HIGH" if float(opportunity.opportunity_score) >= 90 else "MEDIUM"
+        if severity_rank[severity] < severity_rank[minimum_severity]:
+            continue
         session.add(
             AlertEvent(
                 market="bazaar",

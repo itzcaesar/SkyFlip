@@ -234,6 +234,94 @@ class AlertEvent(Base):
     __table_args__ = (Index("ix_alert_events_created_at", "created_at"),)
 
 
+class AuctionHouseSnapshot(Base):
+    __tablename__ = "auction_house_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source_updated_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    page_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    auction_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    bin_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="hypixel")
+
+    __table_args__ = (Index("ix_auction_house_snapshots_fetched_at", "fetched_at"),)
+
+
+class AuctionListing(Base):
+    """The latest observed state for a public Auction House BIN listing."""
+
+    __tablename__ = "auction_listings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    auction_uuid: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    item_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    item_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    normalized_item_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    fingerprint_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    item_fingerprint: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    item_lore: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extra: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str] = mapped_column(String(48), nullable=False, default="misc")
+    tier: Mapped[str] = mapped_column(String(24), nullable=False, default="COMMON")
+    price: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    is_bin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_claimed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_source_updated_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    last_snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    __table_args__ = (
+        Index("ix_auction_listings_active_item", "is_active", "normalized_item_id"),
+        Index(
+            "ix_auction_listings_active_fingerprint",
+            "is_active",
+            "fingerprint_hash",
+        ),
+        Index("ix_auction_listings_end_at", "end_at"),
+    )
+
+
+class AuctionMarketObservation(Base):
+    """Compact market-level observation used for local comparable valuation."""
+
+    __tablename__ = "auction_market_observations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source_updated_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    normalized_item_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    fingerprint_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    item_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    category: Mapped[str] = mapped_column(String(48), nullable=False, default="misc")
+    tier: Mapped[str] = mapped_column(String(24), nullable=False, default="COMMON")
+    listing_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    low_price: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    median_price: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    high_price: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "normalized_item_id",
+            "fingerprint_hash",
+            "source_updated_ms",
+            name="uq_auction_market_observation_source",
+        ),
+        Index(
+            "ix_auction_market_observations_lookup",
+            "normalized_item_id",
+            "fingerprint_hash",
+            "observed_at",
+        ),
+    )
+
+
 class AppSetting(Base):
     __tablename__ = "app_settings"
 

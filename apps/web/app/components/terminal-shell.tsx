@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { Bell, Calculator, ChevronDown, LayoutDashboard, Pickaxe, Radio, Search, Settings2, ShieldAlert, WalletCards } from 'lucide-react';
+import { Bell, Calculator, ChevronDown, Gavel, LayoutDashboard, Pickaxe, Radio, Search, Settings2, ShieldAlert, WalletCards } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 
 const primary = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/bazaar', label: 'Bazaar', icon: WalletCards },
+  { href: '/auctions', label: 'Auction House', icon: Gavel },
   { href: '/alerts', label: 'Alerts', icon: Bell },
 ];
 

@@ -118,6 +118,23 @@ def test_local_tools_and_watchlist_endpoints(client):
     assert alerts.status_code == 200
     assert alerts.json()[0]["item_key"] == "TEST_ITEM:buy_order_to_sell_order"
 
+    preferences = client.get("/api/alerts/preferences")
+    assert preferences.status_code == 200
+    assert preferences.json()["enabled"] is True
+    updated_preferences = client.patch(
+        "/api/alerts/preferences",
+        json={"cooldown_minutes": 15, "minimum_severity": "HIGH"},
+    )
+    assert updated_preferences.status_code == 200
+    assert updated_preferences.json()["cooldown_minutes"] == 15
+
+    updated_watchlist = client.patch(
+        f"/api/watchlist/{watchlist.json()['id']}",
+        json={"min_score": 88, "min_profit": 5, "min_roi": 3},
+    )
+    assert updated_watchlist.status_code == 200
+    assert updated_watchlist.json()["min_score"] == 88
+
     valuation = client.get("/api/valuator?product_id=TEST_ITEM")
     assert valuation.status_code == 200
     assert valuation.json()["current_buy_order"] == 100

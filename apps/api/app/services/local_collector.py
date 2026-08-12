@@ -4,6 +4,7 @@ import time
 
 from ..config import get_settings
 from ..database import SessionLocal
+from .auction_collector import collect_auction_house
 from .collector import collect_bazaar
 from .demo_data import demo_bazaar_payload
 
@@ -55,3 +56,26 @@ async def run_local_collector() -> None:
                 except Exception:
                     logger.exception("local_demo_collection_failed")
         await asyncio.sleep(settings.bazaar_poll_seconds)
+
+
+async def run_local_auction_collector() -> None:
+    """Poll the public Auction House feed for the SQLite-only development workflow."""
+
+    settings = get_settings()
+    logger.info("local_auction_collector_started poll_seconds=%d", settings.auction_poll_seconds)
+    while True:
+        started = time.perf_counter()
+        try:
+            async with SessionLocal() as session:
+                result = await collect_auction_house(session, settings)
+            logger.info(
+                "local_auction_collection_complete duration_ms=%d listings=%s items=%s",
+                int((time.perf_counter() - started) * 1000),
+                result["listings"],
+                result["items"],
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("local_auction_collection_failed")
+        await asyncio.sleep(settings.auction_poll_seconds)

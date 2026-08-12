@@ -131,6 +131,13 @@ class WatchlistCreate(BaseModel):
     min_roi: float = Field(default=0, ge=0)
 
 
+class WatchlistUpdate(BaseModel):
+    min_score: float | None = Field(default=None, ge=0, le=100)
+    min_profit: float | None = Field(default=None, ge=0)
+    min_roi: float | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+
+
 class WatchlistResponse(BaseModel):
     id: int
     product_id: str
@@ -156,6 +163,84 @@ class AlertResponse(BaseModel):
     risk: str | None
     is_read: bool
     created_at: datetime
+
+
+AlertSeverity = Literal["LOW", "MEDIUM", "HIGH"]
+
+
+class AlertPreferencesResponse(BaseModel):
+    enabled: bool
+    minimum_severity: AlertSeverity
+    cooldown_minutes: int = Field(ge=1, le=1440)
+    browser_notifications: bool
+
+
+class AlertPreferencesUpdate(BaseModel):
+    enabled: bool | None = None
+    minimum_severity: AlertSeverity | None = None
+    cooldown_minutes: int | None = Field(default=None, ge=1, le=1440)
+    browser_notifications: bool | None = None
+
+
+class AuctionMarketItemResponse(BaseModel):
+    item_key: str
+    item_name: str
+    normalized_item_id: str
+    fingerprint_hash: str
+    category: str
+    tier: str
+    listings: int
+    low_bin: float
+    median_bin: float
+    high_bin: float
+    fair_value: float
+    best_discount_percent: float | None
+    history_points: int
+    comparable_count: int
+    confidence: float
+    risk: str
+    updated_at: datetime
+
+
+class AuctionListingResponse(BaseModel):
+    auction_uuid: str
+    item_uuid: str | None
+    item_name: str
+    normalized_item_id: str
+    fingerprint_hash: str
+    category: str
+    tier: str
+    price: float
+    fair_value: float | None
+    discount_percent: float | None
+    confidence: float | None
+    risk: str | None
+    end_at: datetime | None
+    last_seen_at: datetime
+
+
+class AuctionMarketResponse(BaseModel):
+    items: list[AuctionMarketItemResponse]
+    page: int
+    page_size: int
+    total: int
+    freshness: FreshnessResponse
+    methodology: str
+
+
+class AuctionListingsResponse(BaseModel):
+    items: list[AuctionListingResponse]
+    page: int
+    page_size: int
+    total: int
+    freshness: FreshnessResponse
+
+
+class AuctionStatusResponse(BaseModel):
+    freshness: FreshnessResponse
+    active_listings: int
+    comparable_items: int
+    last_source_updated_ms: int | None
 
 
 class MarketSettingsResponse(BaseModel):

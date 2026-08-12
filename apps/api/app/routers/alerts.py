@@ -6,7 +6,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..dependencies import session_dependency
 from ..models import BazaarOpportunity, BazaarProduct, WatchlistItem
-from ..schemas import AlertResponse, WatchlistCreate, WatchlistResponse
+from ..schemas import (
+    AlertPreferencesResponse,
+    AlertPreferencesUpdate,
+    AlertResponse,
+    WatchlistCreate,
+    WatchlistResponse,
+    WatchlistUpdate,
+)
+from ..services.alert_preferences import get_alert_preferences, update_alert_preferences
 from ..services.alerts import (
     list_alerts,
     mark_alert_read,
@@ -79,17 +87,41 @@ async def read_all_alerts(session: AsyncSession = Depends(session_dependency)):
 
 
 @router.get(
+    "/alerts/preferences",
+    response_model=AlertPreferencesResponse,
+    summary="Read local alert delivery preferences",
+)
+async def alert_preferences(session: AsyncSession = Depends(session_dependency)):
+    return await get_alert_preferences(session)
+
+
+@router.patch(
+    "/alerts/preferences",
+    response_model=AlertPreferencesResponse,
+    summary="Update local alert delivery preferences",
+)
+async def patch_alert_preferences(
+    payload: AlertPreferencesUpdate,
+    session: AsyncSession = Depends(session_dependency),
+):
+    return await update_alert_preferences(session, payload.model_dump(exclude_none=True))
+
+
+@router.get(
     "/watchlist", response_model=list[WatchlistResponse], summary="List the local Bazaar watchlist"
 )
-async def watchlist(session: AsyncSession = Depends(session_dependency)):
-    rows = (
-        await session.execute(
-            select(WatchlistItem, BazaarProduct)
-            .join(BazaarProduct, WatchlistItem.product_id == BazaarProduct.product_id)
-            .where(WatchlistItem.is_active.is_(True))
-            .order_by(desc(WatchlistItem.created_at))
-        )
-    ).all()
+async def watchlist(
+    include_inactive: bool = False,
+    session: AsyncSession = Depends(session_dependency),
+):
+    query = (
+        select(WatchlistItem, BazaarProduct)
+        .join(BazaarProduct, WatchlistItem.product_id == BazaarProduct.product_id)
+        .order_by(desc(WatchlistItem.created_at))
+    )
+    if not include_inactive:
+        query = query.where(WatchlistItem.is_active.is_(True))
+    rows = (await session.execute(query)).all()
     return [await _watchlist_response(session, item, product) for item, product in rows]
 
 
@@ -116,6 +148,29 @@ async def add_watchlist_item(
     item.min_profit = Decimal(str(payload.min_profit))
     item.min_roi = Decimal(str(payload.min_roi))
     item.is_active = True
+    await session.commit()
+    await refresh_watchlist_alerts(session)
+    return await _watchlist_response(session, item, product)
+
+
+@router.patch("/watchlist/{watchlist_id}", response_model=WatchlistResponse)
+async def update_watchlist_item(
+    watchlist_id: int,
+    payload: WatchlistUpdate,
+    session: AsyncSession = Depends(session_dependency),
+):
+    item = await session.get(WatchlistItem, watchlist_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Watchlist item was not found.")
+    product = await session.get(BazaarProduct, item.product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail="The watched Bazaar item was not found.")
+    updates = payload.model_dump(exclude_none=True)
+    for key in ("min_score", "min_profit", "min_roi"):
+        if key in updates:
+            setattr(item, key, Decimal(str(updates[key])))
+    if "is_active" in updates:
+        item.is_active = bool(updates["is_active"])
     await session.commit()
     await refresh_watchlist_alerts(session)
     return await _watchlist_response(session, item, product)

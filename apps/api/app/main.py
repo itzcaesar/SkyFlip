@@ -13,9 +13,9 @@ from .config import get_settings
 from .database import engine, ensure_local_schema
 from .dependencies import redis_dependency
 from .redis_client import get_redis
-from .routers import alerts, bazaar, health, items, settings, valuator
+from .routers import alerts, auctions, bazaar, health, items, settings, valuator
 from .services.events import redis_event_stream
-from .services.local_collector import run_local_collector
+from .services.local_collector import run_local_auction_collector, run_local_collector
 
 logging.basicConfig(level=get_settings().log_level.upper())
 
@@ -25,14 +25,21 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     await ensure_local_schema()
     local_collector_task = None
+    local_auction_collector_task = None
     if settings.local_collector_enabled and settings.database_url.startswith("sqlite"):
         local_collector_task = asyncio.create_task(run_local_collector())
+        local_auction_collector_task = asyncio.create_task(run_local_auction_collector())
         app.state.local_collector_task = local_collector_task
+        app.state.local_auction_collector_task = local_auction_collector_task
     yield
     if local_collector_task is not None:
         local_collector_task.cancel()
         with suppress(asyncio.CancelledError):
             await local_collector_task
+    if local_auction_collector_task is not None:
+        local_auction_collector_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await local_auction_collector_task
     redis = get_redis()
     try:
         if redis is not None:
@@ -80,6 +87,7 @@ app.include_router(health.router, prefix="/api")
 app.include_router(bazaar.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
+app.include_router(auctions.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(valuator.router, prefix="/api")
 

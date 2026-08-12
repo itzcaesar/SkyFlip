@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     bazaar_chart_retention_days: int = Field(default=90, ge=7, le=3_650)
     bazaar_snapshot_retention_days: int = Field(default=30, ge=1, le=3_650)
 
+    auction_poll_seconds: int = Field(default=600, ge=30, le=86_400)
+    auction_max_pages: int = Field(default=100, ge=1, le=200)
+    auction_history_retention_days: int = Field(default=30, ge=1, le=365)
+    auction_snapshot_retention_days: int = Field(default=30, ge=1, le=365)
+    auction_listing_retention_days: int = Field(default=7, ge=1, le=365)
+    auction_observation_interval_seconds: int = Field(default=21_600, ge=300, le=604_800)
+
     @field_validator("hypixel_base_url")
     @classmethod
     def validate_hypixel_base_url(cls, value: str) -> str:
