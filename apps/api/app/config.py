@@ -36,12 +36,25 @@ class Settings(BaseSettings):
 
     bazaar_sell_fee_rate: float = Field(default=0.0125, ge=0, lt=1)
     bazaar_buy_fee_rate: float = Field(default=0.0, ge=0, lt=1)
+    # A small execution buffer accounts for quote movement/relisting between observation
+    # and fill. It is deliberately separate from the platform fee rates.
+    bazaar_fee_buffer_rate: float = Field(default=0.0025, ge=0, lt=1)
     bazaar_stale_after_seconds: int = Field(default=120, ge=15)
     bazaar_poll_seconds: int = Field(default=30, ge=5)
     bazaar_max_retries: int = Field(default=3, ge=1, le=8)
     bazaar_max_signal_roi_percent: float = Field(default=500.0, ge=100, le=1_000_000)
-    bazaar_max_price_ratio: float = Field(default=10.0, ge=2, le=10_000)
+    # Live sampling showed the current 10x gate still admitted obvious quote gaps;
+    # keep a 5x ceiling until the market-specific baselines have more coverage.
+    bazaar_max_price_ratio: float = Field(default=5.0, ge=2, le=10_000)
+    bazaar_min_signal_roi_percent: float = Field(default=1.0, ge=0, le=100_000)
+    bazaar_min_signal_net_profit: float = Field(default=0.0, ge=0, le=1_000_000_000)
+    bazaar_min_signal_liquidity: float = Field(default=20.0, ge=0, le=100)
+    bazaar_min_signal_confidence: float = Field(default=55.0, ge=0, le=100)
+    bazaar_history_anomaly_min_samples: int = Field(default=12, ge=3, le=2_000)
+    bazaar_history_anomaly_zscore: float = Field(default=6.0, ge=2, le=25)
+    bazaar_history_max_deviation_percent: float = Field(default=50.0, ge=5, le=1_000)
     bazaar_history_retention_days: int = Field(default=7, ge=1, le=365)
+    bazaar_chart_retention_days: int = Field(default=90, ge=7, le=3_650)
     bazaar_snapshot_retention_days: int = Field(default=30, ge=1, le=3_650)
 
     @field_validator("hypixel_base_url")

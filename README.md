@@ -48,7 +48,7 @@ In local mode, the API creates `data/skyflip.db` automatically and runs the Baza
 
 The first local API response may be `UNAVAILABLE` while the collector is making its first upstream request. Local mode uses the upstream Hypixel Bazaar feed by default and never substitutes fake prices. If you intentionally set `LOCAL_DEMO_ENABLED=true` in development, a failed live request may load a clearly labelled deterministic fixture, and the development-only `POST /api/bazaar/demo` endpoint can be used for UI testing.
 
-The local settings screen persists fee, freshness, anomaly, and retention overrides in SQLite. Watchlists and alerts are single-profile local features until authentication is introduced. History is automatically pruned according to the local retention settings.
+The local settings screen persists fee, freshness, anomaly, and retention overrides in SQLite. Watchlists and alerts are single-profile local features until authentication is introduced. Raw history is automatically pruned, while hourly and daily chart candles remain available for longer windows.
 
 For later PostgreSQL/Redis integration testing, use Docker after creating `.env`:
 
@@ -115,9 +115,9 @@ docs/           Architecture and market-engine decisions
 
 ## Data policy
 
-Source payloads are identified by a canonical SHA-256 hash. Identical upstream snapshots do not create duplicate historical rows. Normalized metric history is retained for charting; a later retention job will aggregate high-frequency observations into longer-lived candles before raw retention is expanded.
+Source payloads are identified by a canonical SHA-256 hash. Identical upstream snapshots do not create duplicate historical rows. New live observations are retained as raw points for short-term analysis and merged into durable hourly and daily OHLC-style chart candles. The default local policy keeps raw points for 7 days, chart candles for 90 days, and source snapshots for 30 days.
 
-The configured Bazaar fee policy is centralized in `apps/api/app/config.py` and `apps/api/app/services/bazaar_engine.py`. Change it through environment variables and document the policy before changing production interpretation.
+The configured Bazaar fee policy is centralized in `apps/api/app/config.py` and `apps/api/app/services/bazaar_engine.py`. It includes platform buy/sell fees plus a separate execution buffer for quote movement between observation and fill. Change it through environment variables or the local settings screen and document the policy before changing production interpretation.
 
 `apps/api/tests/fixtures/bazaar_response.json` is a clearly labeled development/test fixture. It is not imported by the production worker and cannot silently become a production fallback.
 

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from statistics import pstdev
+from statistics import median, pstdev
 from typing import Any
 
 from .scoring import BazaarScoreInput, clamp, classify_risk, score_bazaar_opportunity
@@ -12,6 +12,7 @@ INSTANT_BUY_TO_INSTANT_SELL = "instant_buy_to_instant_sell"
 class BazaarFeePolicy:
     buy_fee_rate: float = 0.0
     sell_fee_rate: float = 0.0125
+    buffer_rate: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -101,11 +102,20 @@ def _make_result(
     history_prices: list[tuple[float, float]] | None = None,
     max_reasonable_roi_percent: float = 1_000.0,
     max_price_ratio: float = 50.0,
+    min_signal_roi_percent: float = 0.0,
+    min_signal_net_profit: float = 0.0,
+    min_signal_liquidity: float = 0.0,
+    min_signal_confidence: float = 50.0,
+    history_anomaly_min_samples: int = 12,
+    history_anomaly_zscore: float = 6.0,
+    history_max_deviation_percent: float = 50.0,
 ) -> BazaarResult:
     raw_spread = sell_price - buy_price
     spread_percentage = raw_spread / buy_price * 100 if buy_price > 0 else 0.0
     gross_profit = raw_spread
-    estimated_fees = buy_price * fee_policy.buy_fee_rate + sell_price * fee_policy.sell_fee_rate
+    effective_buy_fee_rate = fee_policy.buy_fee_rate + fee_policy.buffer_rate
+    effective_sell_fee_rate = fee_policy.sell_fee_rate + fee_policy.buffer_rate
+    estimated_fees = buy_price * effective_buy_fee_rate + sell_price * effective_sell_fee_rate
     net_profit = gross_profit - estimated_fees
     roi = net_profit / buy_price * 100 if buy_price > 0 else 0.0
 
@@ -138,7 +148,9 @@ def _make_result(
         estimated_fill_time_seconds = max(60, int(suggested_volume / units_per_second))
 
     competition_score = round(clamp((active_buy_orders + active_sell_orders) / 25 * 100), 2)
-    historical_sell_prices = [sell for _, sell in (history_prices or []) if sell > 0]
+    recent_history = (history_prices or [])[-60:]
+    historical_buy_prices = [buy for buy, _ in recent_history if buy > 0]
+    historical_sell_prices = [sell for _, sell in recent_history if sell > 0]
     returns = [
         (current - previous) / previous * 100
         for previous, current in zip(
@@ -165,6 +177,11 @@ def _make_result(
     if raw_spread <= 0:
         manipulation_risk_score += 10
     anomaly_reasons: list[str] = []
+    if volatility is not None:
+        if volatility >= 50:
+            manipulation_risk_score += 25
+        elif volatility >= 20:
+            manipulation_risk_score += 12
     price_ratio = sell_price / buy_price if buy_price > 0 else 0
     if raw_spread <= 0:
         anomaly_reasons.append("The exit quote is not above the entry quote.")
@@ -176,6 +193,37 @@ def _make_result(
         anomaly_reasons.append(
             f"Quote ratio is {price_ratio:,.1f}x, above the {max_price_ratio:,.0f}x sanity limit."
         )
+
+    def history_outlier_reason(label: str, current: float, samples: list[float]) -> str | None:
+        if len(samples) < history_anomaly_min_samples or current <= 0:
+            return None
+        baseline = median(samples)
+        if baseline <= 0:
+            return None
+        deviations = [abs(value - baseline) for value in samples]
+        mad = median(deviations)
+        # A one-percent floor prevents a flat market from producing a zero scale while
+        # still making a large one-cycle jump obvious after enough observations.
+        scale = max(1.4826 * mad, baseline * 0.01)
+        robust_z = abs(current - baseline) / scale
+        deviation_percent = abs(current / baseline - 1) * 100
+        if (
+            deviation_percent >= history_max_deviation_percent
+            and robust_z >= history_anomaly_zscore
+        ):
+            return (
+                f"{label} quote is {deviation_percent:,.0f}% from the {baseline:,.4g} "
+                f"recent median ({len(samples)} samples, robust z={robust_z:,.1f})."
+            )
+        return None
+
+    for label, current, samples in (
+        ("Entry", buy_price, historical_buy_prices),
+        ("Exit", sell_price, historical_sell_prices),
+    ):
+        reason = history_outlier_reason(label, current, samples)
+        if reason:
+            anomaly_reasons.append(reason)
     if anomaly_reasons:
         manipulation_risk_score = max(manipulation_risk_score + 35, 85)
     manipulation_risk_score = round(clamp(manipulation_risk_score), 2)
@@ -186,10 +234,18 @@ def _make_result(
     confidence_score += 10 if buy_volume or sell_volume else 0
     confidence_score += 10 if active_buy_orders or active_sell_orders else 0
     confidence_score += 5 if moving_week > 0 else 0
-    # No 95%+ confidence from a single snapshot; historical samples can lift this later.
-    confidence_score = min(
-        78.0 if history_samples < 10 else 95.0, confidence_score + min(history_samples, 20) * 0.75
+    # Confidence grows with repeated live observations, but does not become near-certain
+    # after only a handful of identical polls.
+    confidence_cap = (
+        68.0
+        if history_samples < 3
+        else 78.0
+        if history_samples < history_anomaly_min_samples
+        else 88.0
+        if history_samples < 30
+        else 94.0
     )
+    confidence_score = min(confidence_cap, confidence_score + min(history_samples, 60) * 0.25)
     confidence_score = round(clamp(confidence_score), 2)
     if anomaly_reasons:
         confidence_score = min(confidence_score, 35.0)
@@ -224,6 +280,29 @@ def _make_result(
     if history_samples == 0:
         explanations.append(
             "Confidence is capped because historical observations are not available yet."
+        )
+    elif history_samples < history_anomaly_min_samples:
+        explanations.append(
+            f"History has {history_samples} live samples; anomaly checks activate at "
+            f"{history_anomaly_min_samples}."
+        )
+    if fee_policy.buffer_rate > 0:
+        explanations.append(
+            f"Estimated fees include a {fee_policy.buffer_rate * 100:.2f}% execution buffer."
+        )
+    if roi < min_signal_roi_percent:
+        explanations.append(f"ROI is below the {min_signal_roi_percent:.2f}% signal threshold.")
+    if net_profit < min_signal_net_profit:
+        explanations.append(
+            f"Net profit is below the {min_signal_net_profit:,.4g} coin signal threshold."
+        )
+    if estimated_liquidity < min_signal_liquidity:
+        explanations.append(
+            f"Liquidity is below the {min_signal_liquidity:.0f}/100 signal threshold."
+        )
+    if confidence_score < min_signal_confidence:
+        explanations.append(
+            f"Confidence is below the {min_signal_confidence:.0f}% signal threshold."
         )
     for reason in anomaly_reasons:
         explanations.append(f"Sanity check: {reason} Treat this quote as an anomaly.")
@@ -261,9 +340,11 @@ def _make_result(
         classification=score.classification,
         capital_required=round(capital_required, 8),
         is_qualified=(
-            net_profit > 0
+            net_profit >= min_signal_net_profit
+            and roi >= min_signal_roi_percent
             and suggested_volume > 0
-            and confidence_score >= 50
+            and estimated_liquidity >= min_signal_liquidity
+            and confidence_score >= min_signal_confidence
             and not anomaly_reasons
         ),
         score_breakdown=score.breakdown,
@@ -279,8 +360,16 @@ def compute_bazaar_opportunities(
     history_samples: int = 0,
     history_prices: list[tuple[float, float]] | None = None,
     history_prices_by_flip: dict[str, list[tuple[float, float]]] | None = None,
+    history_samples_by_flip: dict[str, int] | None = None,
     max_reasonable_roi_percent: float = 1_000.0,
     max_price_ratio: float = 50.0,
+    min_signal_roi_percent: float = 0.0,
+    min_signal_net_profit: float = 0.0,
+    min_signal_liquidity: float = 0.0,
+    min_signal_confidence: float = 50.0,
+    history_anomaly_min_samples: int = 12,
+    history_anomaly_zscore: float = 6.0,
+    history_max_deviation_percent: float = 50.0,
 ) -> list[BazaarResult]:
     """Compute both supported Bazaar strategies from one normalized Hypixel product."""
 
@@ -298,6 +387,8 @@ def compute_bazaar_opportunities(
         return []
 
     policy = fee_policy or BazaarFeePolicy()
+    price_history = history_prices_by_flip or {}
+    sample_counts = history_samples_by_flip or {}
     recommended_buy_order = instant_sell
     recommended_sell_order = instant_buy
     return [
@@ -310,12 +401,17 @@ def compute_bazaar_opportunities(
             buy_levels=buy_levels,
             sell_levels=sell_levels,
             fee_policy=policy,
-            history_samples=history_samples,
-            history_prices=(history_prices_by_flip or {}).get(
-                BUY_ORDER_TO_SELL_ORDER, history_prices or []
-            ),
+            history_samples=sample_counts.get(BUY_ORDER_TO_SELL_ORDER, history_samples),
+            history_prices=price_history.get(BUY_ORDER_TO_SELL_ORDER, history_prices or []),
             max_reasonable_roi_percent=max_reasonable_roi_percent,
             max_price_ratio=max_price_ratio,
+            min_signal_roi_percent=min_signal_roi_percent,
+            min_signal_net_profit=min_signal_net_profit,
+            min_signal_liquidity=min_signal_liquidity,
+            min_signal_confidence=min_signal_confidence,
+            history_anomaly_min_samples=history_anomaly_min_samples,
+            history_anomaly_zscore=history_anomaly_zscore,
+            history_max_deviation_percent=history_max_deviation_percent,
         ),
         _make_result(
             product_id,
@@ -326,11 +422,16 @@ def compute_bazaar_opportunities(
             buy_levels=buy_levels,
             sell_levels=sell_levels,
             fee_policy=policy,
-            history_samples=history_samples,
-            history_prices=(history_prices_by_flip or {}).get(
-                INSTANT_BUY_TO_INSTANT_SELL, history_prices or []
-            ),
+            history_samples=sample_counts.get(INSTANT_BUY_TO_INSTANT_SELL, history_samples),
+            history_prices=price_history.get(INSTANT_BUY_TO_INSTANT_SELL, history_prices or []),
             max_reasonable_roi_percent=max_reasonable_roi_percent,
             max_price_ratio=max_price_ratio,
+            min_signal_roi_percent=min_signal_roi_percent,
+            min_signal_net_profit=min_signal_net_profit,
+            min_signal_liquidity=min_signal_liquidity,
+            min_signal_confidence=min_signal_confidence,
+            history_anomaly_min_samples=history_anomaly_min_samples,
+            history_anomaly_zscore=history_anomaly_zscore,
+            history_max_deviation_percent=history_max_deviation_percent,
         ),
     ]

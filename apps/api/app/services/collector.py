@@ -14,6 +14,12 @@ from .alerts import refresh_watchlist_alerts
 from .bazaar_engine import BazaarFeePolicy, compute_bazaar_opportunities, humanize_product_id
 from .events import publish_event
 from .freshness import freshness_for, utc_now
+from .history_rollups import (
+    HistoryObservation,
+    ensure_history_rollups,
+    observation_from_result,
+    upsert_history_rollups,
+)
 from .hypixel_client import HypixelClient
 from .preferences import get_runtime_settings
 from .retention import prune_local_history
@@ -186,6 +192,7 @@ async def collect_bazaar(
     fee_policy = BazaarFeePolicy(
         buy_fee_rate=effective_settings.bazaar_buy_fee_rate,
         sell_fee_rate=effective_settings.bazaar_sell_fee_rate,
+        buffer_rate=effective_settings.bazaar_fee_buffer_rate,
     )
     source_age_seconds = max(0, int(now.timestamp() - source_updated_ms / 1000))
     source_is_stale = source_age_seconds > effective_settings.bazaar_stale_after_seconds
@@ -201,6 +208,7 @@ async def collect_bazaar(
     processed_products = 0
     processed_opportunities = 0
     qualified_opportunities = 0
+    new_history_observations: list[HistoryObservation] = []
     for product_id, product_payload in products_payload.items():
         if not isinstance(product_payload, dict):
             continue
@@ -231,8 +239,23 @@ async def collect_bazaar(
                     (product_id, "instant_buy_to_instant_sell"), []
                 ),
             },
+            history_samples_by_flip={
+                "buy_order_to_sell_order": len(
+                    history_prices.get((product_id, "buy_order_to_sell_order"), [])
+                ),
+                "instant_buy_to_instant_sell": len(
+                    history_prices.get((product_id, "instant_buy_to_instant_sell"), [])
+                ),
+            },
             max_reasonable_roi_percent=effective_settings.bazaar_max_signal_roi_percent,
             max_price_ratio=effective_settings.bazaar_max_price_ratio,
+            min_signal_roi_percent=effective_settings.bazaar_min_signal_roi_percent,
+            min_signal_net_profit=effective_settings.bazaar_min_signal_net_profit,
+            min_signal_liquidity=effective_settings.bazaar_min_signal_liquidity,
+            min_signal_confidence=effective_settings.bazaar_min_signal_confidence,
+            history_anomaly_min_samples=effective_settings.bazaar_history_anomaly_min_samples,
+            history_anomaly_zscore=effective_settings.bazaar_history_anomaly_zscore,
+            history_max_deviation_percent=effective_settings.bazaar_history_max_deviation_percent,
         )
         if not results:
             # Keep the product identity searchable, but do not present old metrics as fresh
@@ -274,10 +297,22 @@ async def collect_bazaar(
                         source_updated_ms=source_updated_ms,
                     )
                 )
+                new_history_observations.append(
+                    observation_from_result(
+                        product_id=product_id,
+                        flip_type=result.flip_type,
+                        observed_at=now,
+                        result=result,
+                        source_updated_ms=source_updated_ms,
+                    )
+                )
         processed_products += 1
 
     await session.commit()
     try:
+        backfilled_rollups = await ensure_history_rollups(session)
+        if new_history_observations and backfilled_rollups == 0:
+            await upsert_history_rollups(session, new_history_observations)
         await prune_local_history(session, effective_settings, now=now)
         await refresh_watchlist_alerts(session)
     except Exception:

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from math import floor
 from typing import Literal
 
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import Settings
 from ..dependencies import session_dependency, settings_dependency
-from ..models import BazaarHistoryPoint, BazaarOpportunity, BazaarProduct
+from ..models import BazaarHistoryPoint, BazaarHistoryRollup, BazaarOpportunity, BazaarProduct
 from ..schemas import (
     BazaarHistoryResponse,
     BazaarOpportunityPage,
@@ -18,6 +19,7 @@ from ..schemas import (
 )
 from ..services.collector import collect_bazaar, get_bazaar_status
 from ..services.demo_data import demo_bazaar_payload
+from ..services.freshness import utc_now
 from ..services.hypixel_client import HypixelClient
 
 router = APIRouter(prefix="/bazaar", tags=["bazaar"])
@@ -38,6 +40,58 @@ SORT_COLUMNS = {
     "opportunity_score": BazaarOpportunity.opportunity_score,
     "observed_at": BazaarOpportunity.observed_at,
 }
+
+HISTORY_RANGE_HOURS = {
+    "6h": 6,
+    "24h": 24,
+    "7d": 24 * 7,
+    "30d": 24 * 30,
+    "90d": 24 * 90,
+}
+
+
+def _raw_history_point(row: BazaarHistoryPoint) -> dict:
+    return {
+        "observed_at": row.observed_at,
+        "buy_price": float(row.buy_price),
+        "buy_open": float(row.buy_price),
+        "buy_high": float(row.buy_price),
+        "buy_low": float(row.buy_price),
+        "buy_close": float(row.buy_price),
+        "sell_price": float(row.sell_price),
+        "sell_open": float(row.sell_price),
+        "sell_high": float(row.sell_price),
+        "sell_low": float(row.sell_price),
+        "sell_close": float(row.sell_price),
+        "spread": float(row.spread),
+        "volume": row.volume,
+        "liquidity": float(row.liquidity),
+        "opportunity_score": float(row.opportunity_score),
+        "sample_count": 1,
+        "is_aggregated": False,
+    }
+
+
+def _rollup_history_point(row: BazaarHistoryRollup) -> dict:
+    return {
+        "observed_at": row.bucket_start,
+        "buy_price": float(row.buy_close),
+        "buy_open": float(row.buy_open),
+        "buy_high": float(row.buy_high),
+        "buy_low": float(row.buy_low),
+        "buy_close": float(row.buy_close),
+        "sell_price": float(row.sell_close),
+        "sell_open": float(row.sell_open),
+        "sell_high": float(row.sell_high),
+        "sell_low": float(row.sell_low),
+        "sell_close": float(row.sell_close),
+        "spread": float(row.sell_close) - float(row.buy_close),
+        "volume": row.volume,
+        "liquidity": float(row.liquidity),
+        "opportunity_score": float(row.opportunity_score),
+        "sample_count": row.sample_count,
+        "is_aggregated": True,
+    }
 
 
 def _response(opportunity: BazaarOpportunity, product: BazaarProduct) -> BazaarOpportunityResponse:
@@ -265,6 +319,10 @@ async def product_history(
     flip_type: Literal[
         "buy_order_to_sell_order", "instant_buy_to_instant_sell"
     ] = "buy_order_to_sell_order",
+    range_key: Literal["6h", "24h", "7d", "30d", "90d"] = Query(
+        default="7d", alias="range"
+    ),
+    resolution: Literal["auto", "raw", "hour", "day"] = "auto",
     limit: int = Query(default=240, ge=1, le=2_000),
     session: AsyncSession = Depends(session_dependency),
     settings: Settings = Depends(settings_dependency),
@@ -274,33 +332,80 @@ async def product_history(
         raise HTTPException(
             status_code=404, detail="Bazaar product was not found in observed market data."
         )
-    rows = (
-        await session.scalars(
-            select(BazaarHistoryPoint)
-            .where(
-                BazaarHistoryPoint.product_id == product_id,
-                BazaarHistoryPoint.flip_type == flip_type,
-            )
-            .order_by(desc(BazaarHistoryPoint.observed_at))
-            .limit(limit)
+    selected_resolution = resolution
+    if selected_resolution == "auto":
+        selected_resolution = "raw" if range_key in {"6h", "24h"} else (
+            "hour" if range_key == "7d" else "day"
         )
-    ).all()
-    points = [
-        {
-            "observed_at": row.observed_at,
-            "buy_price": float(row.buy_price),
-            "sell_price": float(row.sell_price),
-            "spread": float(row.spread),
-            "volume": row.volume,
-            "liquidity": float(row.liquidity),
-            "opportunity_score": float(row.opportunity_score),
-        }
-        for row in reversed(rows)
-    ]
+    cutoff = utc_now() - timedelta(hours=HISTORY_RANGE_HOURS[range_key])
+    if selected_resolution == "raw":
+        raw_rows = (
+            await session.scalars(
+                select(BazaarHistoryPoint)
+                .where(
+                    BazaarHistoryPoint.product_id == product_id,
+                    BazaarHistoryPoint.flip_type == flip_type,
+                    BazaarHistoryPoint.observed_at >= cutoff,
+                )
+                .order_by(desc(BazaarHistoryPoint.observed_at))
+                .limit(limit)
+            )
+        ).all()
+        points = [_raw_history_point(row) for row in reversed(raw_rows)]
+    else:
+        rollup_rows = (
+            await session.scalars(
+                select(BazaarHistoryRollup)
+                .where(
+                    BazaarHistoryRollup.product_id == product_id,
+                    BazaarHistoryRollup.flip_type == flip_type,
+                    BazaarHistoryRollup.interval == selected_resolution,
+                    BazaarHistoryRollup.bucket_start >= cutoff,
+                )
+                .order_by(desc(BazaarHistoryRollup.bucket_start))
+                .limit(limit)
+            )
+        ).all()
+        points = [_rollup_history_point(row) for row in reversed(rollup_rows)]
+        # A database upgraded before the first rollup maintenance cycle can still serve
+        # useful raw observations rather than rendering an empty chart.
+        if not points:
+            raw_rows = (
+                await session.scalars(
+                    select(BazaarHistoryPoint)
+                    .where(
+                        BazaarHistoryPoint.product_id == product_id,
+                        BazaarHistoryPoint.flip_type == flip_type,
+                        BazaarHistoryPoint.observed_at >= cutoff,
+                    )
+                    .order_by(desc(BazaarHistoryPoint.observed_at))
+                    .limit(limit)
+                )
+            ).all()
+            points = [_raw_history_point(row) for row in reversed(raw_rows)]
+            selected_resolution = "raw"
+    sell_prices = [point["sell_price"] for point in points if point["sell_price"] > 0]
+    summary = {
+        "first_at": points[0]["observed_at"] if points else None,
+        "last_at": points[-1]["observed_at"] if points else None,
+        "samples": sum(point["sample_count"] for point in points),
+        "points": len(points),
+        "min_sell_price": min(sell_prices) if sell_prices else None,
+        "max_sell_price": max(sell_prices) if sell_prices else None,
+        "latest_sell_price": sell_prices[-1] if sell_prices else None,
+        "average_liquidity": (
+            round(sum(point["liquidity"] for point in points) / len(points), 2)
+            if points
+            else None
+        ),
+    }
     return BazaarHistoryResponse(
         product_id=product_id,
         flip_type=flip_type,
+        range=range_key,
+        resolution=selected_resolution,
         points=points,
+        summary=summary,
         freshness=await _freshness(session, settings),
     )
 

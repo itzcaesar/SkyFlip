@@ -86,7 +86,10 @@ class BazaarOpportunityPage(BaseModel):
 class BazaarHistoryResponse(BaseModel):
     product_id: str
     flip_type: str
+    range: str
+    resolution: str
     points: list[dict]
+    summary: dict
     freshness: FreshnessResponse
 
 
@@ -158,10 +161,19 @@ class AlertResponse(BaseModel):
 class MarketSettingsResponse(BaseModel):
     sell_fee_rate: float
     buy_fee_rate: float
+    fee_buffer_rate: float
     stale_after_seconds: int
     max_signal_roi_percent: float
     max_price_ratio: float
+    min_signal_roi_percent: float
+    min_signal_net_profit: float
+    min_signal_liquidity: float
+    min_signal_confidence: float
+    history_anomaly_min_samples: int
+    history_anomaly_zscore: float
+    history_max_deviation_percent: float
     history_retention_days: int
+    chart_retention_days: int
     snapshot_retention_days: int
     persisted_overrides: list[str]
 
@@ -169,10 +181,19 @@ class MarketSettingsResponse(BaseModel):
 class MarketSettingsUpdate(BaseModel):
     sell_fee_rate: float | None = Field(default=None, ge=0, lt=1)
     buy_fee_rate: float | None = Field(default=None, ge=0, lt=1)
+    fee_buffer_rate: float | None = Field(default=None, ge=0, lt=1)
     stale_after_seconds: int | None = Field(default=None, ge=15, le=86_400)
     max_signal_roi_percent: float | None = Field(default=None, ge=100, le=1_000_000)
     max_price_ratio: float | None = Field(default=None, ge=2, le=10_000)
+    min_signal_roi_percent: float | None = Field(default=None, ge=0, le=100_000)
+    min_signal_net_profit: float | None = Field(default=None, ge=0, le=1_000_000_000)
+    min_signal_liquidity: float | None = Field(default=None, ge=0, le=100)
+    min_signal_confidence: float | None = Field(default=None, ge=0, le=100)
+    history_anomaly_min_samples: int | None = Field(default=None, ge=3, le=2_000)
+    history_anomaly_zscore: float | None = Field(default=None, ge=2, le=25)
+    history_max_deviation_percent: float | None = Field(default=None, ge=5, le=1_000)
     history_retention_days: int | None = Field(default=None, ge=1, le=365)
+    chart_retention_days: int | None = Field(default=None, ge=7, le=3_650)
     snapshot_retention_days: int | None = Field(default=None, ge=1, le=3_650)
 
 

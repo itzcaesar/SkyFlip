@@ -134,6 +134,59 @@ class BazaarHistoryPoint(Base):
     )
 
 
+class BazaarHistoryRollup(Base):
+    """Persistent chart candles built from normalized Bazaar observations.
+
+    Raw observations are intentionally short-lived in local mode. These hourly and daily
+    candles keep a useful chart trail after raw retention removes the high-frequency rows.
+    """
+
+    __tablename__ = "bazaar_history_rollups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    product_id: Mapped[str] = mapped_column(
+        ForeignKey("bazaar_products.product_id", ondelete="CASCADE"), nullable=False
+    )
+    flip_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    interval: Mapped[str] = mapped_column(String(8), nullable=False)
+    bucket_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    buy_open: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    buy_high: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    buy_low: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    buy_close: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    sell_open: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    sell_high: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    sell_low: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    sell_close: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    volume: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    liquidity: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False, default=0)
+    opportunity_score: Mapped[Decimal] = mapped_column(
+        Numeric(8, 4), nullable=False, default=0
+    )
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source_updated_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "product_id",
+            "flip_type",
+            "interval",
+            "bucket_start",
+            name="uq_bazaar_history_rollup_bucket",
+        ),
+        Index(
+            "ix_bazaar_history_rollup_lookup",
+            "product_id",
+            "flip_type",
+            "interval",
+            "bucket_start",
+        ),
+    )
+
+
 class WatchlistItem(Base):
     __tablename__ = "watchlist_items"
 

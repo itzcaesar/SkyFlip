@@ -87,3 +87,38 @@ def test_history_supplies_volatility_and_momentum() -> None:
 
     assert order_flip.volatility is not None
     assert order_flip.short_term_momentum == 21
+
+
+def test_history_outlier_is_not_a_qualified_signal() -> None:
+    history = [(100, 100)] * 12
+    product = sample_product()
+    product["quick_status"]["buyPrice"] = 200
+    product["quick_status"]["sellPrice"] = 100
+    results = compute_bazaar_opportunities(
+        "HISTORY_ANOMALY",
+        product,
+        history_samples=12,
+        history_prices_by_flip={BUY_ORDER_TO_SELL_ORDER: history},
+        history_samples_by_flip={BUY_ORDER_TO_SELL_ORDER: 12},
+        history_max_deviation_percent=50,
+    )
+    order_flip = next(result for result in results if result.flip_type == BUY_ORDER_TO_SELL_ORDER)
+
+    assert order_flip.is_qualified is False
+    assert order_flip.manipulation_risk in {"HIGH", "EXTREME"}
+    assert any("recent median" in explanation for explanation in order_flip.signal_explanations)
+
+
+def test_signal_policy_applies_execution_buffer_and_minimums() -> None:
+    results = compute_bazaar_opportunities(
+        "POLICY_ITEM",
+        sample_product(),
+        fee_policy=BazaarFeePolicy(buy_fee_rate=0, sell_fee_rate=0.01, buffer_rate=0.002),
+        min_signal_roi_percent=10,
+        min_signal_liquidity=95,
+    )
+    order_flip = next(result for result in results if result.flip_type == BUY_ORDER_TO_SELL_ORDER)
+
+    assert order_flip.estimated_fees == 1.52
+    assert order_flip.is_qualified is False
+    assert any("signal threshold" in explanation for explanation in order_flip.signal_explanations)

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -110,9 +112,9 @@ async def add_watchlist_item(
     if item is None:
         item = WatchlistItem(product_id=product.product_id, flip_type=payload.flip_type)
         session.add(item)
-    item.min_score = payload.min_score
-    item.min_profit = payload.min_profit
-    item.min_roi = payload.min_roi
+    item.min_score = Decimal(str(payload.min_score))
+    item.min_profit = Decimal(str(payload.min_profit))
+    item.min_roi = Decimal(str(payload.min_roi))
     item.is_active = True
     await session.commit()
     await refresh_watchlist_alerts(session)

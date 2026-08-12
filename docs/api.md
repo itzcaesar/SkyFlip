@@ -16,6 +16,8 @@ Only current, non-stale, qualified opportunities are returned by default. Extrem
 
 `POST /api/bazaar/demo` loads the deterministic local dataset only when `LOCAL_DEMO_ENABLED=true` and `APP_ENV` is not production. Responses expose `freshness.source=demo`, and the web app displays a `DEMO DATA` badge. Demo values are never a live-market fallback in production.
 
+`GET /api/bazaar/products/{productId}/history?range=7d&resolution=auto` supports `range=6h|24h|7d|30d|90d` and `resolution=auto|raw|hour|day`. `auto` uses raw observations for short ranges, hourly candles for 7 days, and daily candles for longer windows. Points include buy/sell OHLC values, spread, volume, liquidity, opportunity score, and `sample_count`; the response also includes a range summary.
+
 ## Capital optimizer
 
 `POST /api/bazaar/capital-optimize`
